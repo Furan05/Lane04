@@ -6,12 +6,24 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct Lane04App: App {
+    init() {
+        FontRegistrar.registerAll()
+    }
+
     var body: some Scene {
         WindowGroup {
-            WorkoutBuilderView()
+            RootView()
         }
+        .modelContainer(for: [
+            RunProtocol.self,
+            ProtocolBlock.self,
+            ProtocolStep.self,
+            OperatorProfile.self,
+            RunLog.self
+        ])
     }
 }
