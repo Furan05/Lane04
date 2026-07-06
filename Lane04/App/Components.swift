@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 // MARK: - Tag de filière (contour, couleur = température, radius 0)
 
@@ -122,20 +121,3 @@ struct EmptyStateView: View {
     }
 }
 
-// MARK: - Interpolation de couleur (dégradé thermique EMBER↔CRYO)
-
-extension Color {
-    func blended(with other: Color, t: Double) -> Color {
-        let a = UIColor(self), b = UIColor(other)
-        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
-        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
-        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
-        b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
-        let k = CGFloat(max(0, min(1, t)))
-        return Color(.sRGB,
-                     red: Double(ar + (br - ar) * k),
-                     green: Double(ag + (bg - ag) * k),
-                     blue: Double(ab + (bb - ab) * k),
-                     opacity: Double(aa + (ba - aa) * k))
-    }
-}

@@ -34,6 +34,19 @@ extension Color {
     /// `color.steelDim` — décoratif uniquement (échoue AA).
     static let steelDim = Color(hex: 0x565E68)
 
+    // Rampe thermique — 5 crans EMBER→CRYO via le NEUTRE, jamais par le vert.
+    // Source unique du spectre : zones OPERATOR, tags de séance, futurs anneaux.
+    /// Z5 — VMA / effort maximal. EMBER pur.
+    static let zoneZ5 = Color(hex: 0xFF4D00)
+    /// Z4 — seuil / VO2max. Ambre désaturé.
+    static let zoneZ4 = Color(hex: 0xC17A45)
+    /// Z3 — tempo / seuil bas. Acier chaud (point médian).
+    static let zoneZ3 = Color(hex: 0x8C8279)
+    /// Z2 — endurance. Cyan désaturé.
+    static let zoneZ2 = Color(hex: 0x5A97A6)
+    /// Z1 — récupération. CRYO pur.
+    static let zoneZ1 = Color(hex: 0x00E5FF)
+
     init(hex: UInt32) {
         let r = Double((hex >> 16) & 0xFF) / 255
         let g = Double((hex >> 8) & 0xFF) / 255

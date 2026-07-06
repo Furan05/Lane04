@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 enum TrainingZone: String, CaseIterable, Identifiable {
     case z1 = "Z1"
@@ -36,6 +37,17 @@ enum TrainingZone: String, CaseIterable, Identifiable {
         case .z3: return 80...90
         case .z4: return 90...100
         case .z5: return 100...115
+        }
+    }
+
+    /// Couleur du cran sur la rampe thermique (source unique : Theme).
+    var color: Color {
+        switch self {
+        case .z1: return .zoneZ1
+        case .z2: return .zoneZ2
+        case .z3: return .zoneZ3
+        case .z4: return .zoneZ4
+        case .z5: return .zoneZ5
         }
     }
 

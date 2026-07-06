@@ -98,8 +98,8 @@ private struct OperatorContent: View {
                 .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
             VStack(spacing: 0) {
                 let zones = Array(TrainingZone.allCases.reversed()) // Z5 → Z1
-                ForEach(Array(zones.enumerated()), id: \.element) { index, zone in
-                    zoneRow(zone, t: Double(index) / Double(zones.count - 1))
+                ForEach(zones) { zone in
+                    zoneRow(zone)
                     if zone != zones.last {
                         Rectangle().fill(Surface.hairline).frame(height: 1)
                     }
@@ -111,8 +111,8 @@ private struct OperatorContent: View {
         .glassCard()
     }
 
-    private func zoneRow(_ zone: TrainingZone, t: Double) -> some View {
-        let tint = Color.ember.blended(with: .cryo, t: t) // spectre EMBER→CRYO
+    private func zoneRow(_ zone: TrainingZone) -> some View {
+        let tint = zone.color
         return HStack(spacing: Spacing.m) {
             RoundedRectangle(cornerRadius: 1)
                 .fill(tint)

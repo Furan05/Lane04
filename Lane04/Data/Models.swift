@@ -24,11 +24,15 @@ enum Discipline: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     /// Rendu du tag, crochets inclus (les crochets font partie du glyphe, §06).
     var tag: String { "[\(rawValue)]" }
-    /// Contour thermique : spectre EMBER (VMA) → CRYO (RECUP), §06.
+    /// Contour thermique sur la rampe curatée (§06) : VMA=Z5 (EMBER) → RECUP=Z1 (CRYO).
     var tint: Color {
-        let spectrum: [Discipline] = [.vma, .seuil, .tempo, .fartlek, .recup]
-        let i = spectrum.firstIndex(of: self) ?? 0
-        return Color.ember.blended(with: .cryo, t: Double(i) / Double(spectrum.count - 1))
+        switch self {
+        case .vma:     return .zoneZ5
+        case .seuil:   return .zoneZ4
+        case .tempo:   return .zoneZ3
+        case .fartlek: return .zoneZ2
+        case .recup:   return .zoneZ1
+        }
     }
 }
 
