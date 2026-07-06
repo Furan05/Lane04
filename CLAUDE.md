@@ -28,6 +28,8 @@ Issues du case study §01–09. Toute PR doit les respecter.
 - `docs/screens.md` — les 12 écrans et leurs états (nominaux, empty, faults) + hero button 4 états + matrice des composants (§08–09).
 - `docs/copy.md` — grille de conversion lexicale + labels VoiceOver en français clair (§02).
 - `docs/data-model.md` — le modèle de données **actuel** tel qu'il est, et ses tensions avec le case study (à trancher).
+- `docs/session-notes.md` — **handoff** : décisions hors case study à ne pas défaire + question ouverte LOGS (à lire avant la Phase 3d).
+- `docs/screens.md` contient l'**état d'avancement** réel des écrans (✅/🟡/⬜ + commits).
 
 ## Commandes
 
