@@ -60,6 +60,13 @@ enum ProtocolState: String, Codable {
     case fault = "SYNC FAULT"
 }
 
+/// Provenance de la VMA → l'instrument distingue la mesure de l'estimation.
+enum VMAProvenance: String, Codable {
+    case calibrated    // test 6 min (demi-Cooper) saisi
+    case estimated     // dérivée d'une course récente
+    case uncalibrated  // jamais renseignée (valeur par défaut)
+}
+
 // MARK: - Modèles
 
 /// Un protocole compilé : template réutilisable ou copie `[DRAFT]` éditable.
@@ -70,6 +77,8 @@ final class RunProtocol {
     var discipline: Discipline
     /// Vrai = template de départ (clonable via COMPILE FROM TEMPLATE), non figé.
     var isTemplate: Bool
+    /// Vrai = protocole de test VMA (effort maximal sans cible d'allure) → badge [TEST].
+    var isTest: Bool = false
     var state: ProtocolState
     var createdAt: Date
     /// Résumé éditorial (français, langue de lecture).
@@ -83,6 +92,7 @@ final class RunProtocol {
         name: String,
         discipline: Discipline,
         isTemplate: Bool = false,
+        isTest: Bool = false,
         state: ProtocolState = .draft,
         createdAt: Date = .now,
         summary: String = "",
@@ -92,6 +102,7 @@ final class RunProtocol {
         self.name = name
         self.discipline = discipline
         self.isTemplate = isTemplate
+        self.isTest = isTest
         self.state = state
         self.createdAt = createdAt
         self.summary = summary
@@ -163,13 +174,17 @@ final class ProtocolStep {
 @Model
 final class OperatorProfile {
     var id: UUID
-    /// VMA en km/h.
+    /// VMA en km/h. Défaut 14.0 (coureur médian ; un défaut flatteur fausserait
+    /// la première lecture des zones).
     var vma: Double
+    /// D'où vient la VMA : test mesuré, estimation course, ou jamais renseignée.
+    var provenance: VMAProvenance = VMAProvenance.uncalibrated
     var updatedAt: Date
 
-    init(id: UUID = UUID(), vma: Double = 16.0, updatedAt: Date = .now) {
+    init(id: UUID = UUID(), vma: Double = 14.0, provenance: VMAProvenance = .uncalibrated, updatedAt: Date = .now) {
         self.id = id
         self.vma = vma
+        self.provenance = provenance
         self.updatedAt = updatedAt
     }
 }

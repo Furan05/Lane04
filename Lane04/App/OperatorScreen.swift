@@ -2,8 +2,9 @@
 //  OperatorScreen.swift
 //  Lane04
 //
-//  Écran 08 — OPERATOR. Profil physiologique : VMA saisie, zones Z1–Z5 dérivées,
-//  spectre thermique. Accessible depuis CONSOLE.
+//  Écran 08 — OPERATOR. Profil physiologique : VMA (mesurée / estimée / défaut),
+//  zones Z1–Z5 dérivées, spectre thermique. Accessible depuis CONSOLE.
+//  L'instrument distingue toujours la MESURE de l'ESTIMATION et montre sa formule.
 //
 
 import SwiftUI
@@ -32,62 +33,79 @@ private struct OperatorContent: View {
     let onBack: () -> Void
 
     var body: some View {
-        ScreenScaffold(title: "OPERATOR", status: "CALIBRATED", onBack: onBack) {
+        ScreenScaffold(title: "OPERATOR", status: statusText, onBack: onBack) {
             VStack(spacing: Spacing.xl) {
-                vmaEditor
+                vmaReadout
+                calibration
                 zonesList
             }
         }
     }
 
-    // MARK: VMA
+    // MARK: Statut [BRACKET] selon provenance
 
-    private var vmaEditor: some View {
+    private var statusText: String {
+        switch profile.provenance {
+        case .calibrated:   return "CALIBRATED — \(Format.dayMonth(profile.updatedAt))"
+        case .estimated:    return "ESTIMATED"
+        case .uncalibrated: return "UNCALIBRATED"
+        }
+    }
+
+    /// Ligne de provenance en français (langue de lecture) sous la VMA.
+    private var provenanceNote: String {
+        switch profile.provenance {
+        case .calibrated:   return "Mesurée au test 6 min le \(Format.dayMonth(profile.updatedAt))."
+        case .estimated:    return "Estimée d'une course récente. Mesure-la pour plus de précision."
+        case .uncalibrated: return "Valeur par défaut. Calibre pour caler tes zones."
+        }
+    }
+
+    private var provenanceTint: Color {
+        profile.provenance == .calibrated ? .cryo : .steel
+    }
+
+    // MARK: VMA (lecture seule — la valeur se règle par calibration)
+
+    private var vmaReadout: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Text("VMA")
-                .font(.label).tracking(1.5).foregroundStyle(Color.cryo)
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text(String(format: "%.1f", profile.vma))
-                        .font(.dataXL).foregroundStyle(Color.laneWhite)
-                        .metricDigits().contentTransition(.numericText())
-                    Text("KM/H").font(.label).tracking(1.5).foregroundStyle(Color.steel)
-                }
-                Spacer()
-                stepper
+                .font(.label).tracking(1.5).foregroundStyle(provenanceTint)
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(String(format: "%.1f", profile.vma))
+                    .font(.dataXL).foregroundStyle(Color.laneWhite)
+                    .metricDigits().contentTransition(.numericText())
+                Text("KM/H").font(.label).tracking(1.5).foregroundStyle(Color.steel)
             }
+            Text(provenanceNote)
+                .font(.bodyBrand).foregroundStyle(Color.steel)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
     }
 
-    private var stepper: some View {
-        HStack(spacing: 1) {
-            stepButton("minus") { setVMA(profile.vma - 0.5) }
-            stepButton("plus") { setVMA(profile.vma + 0.5) }
+    // MARK: CALIBRATION (deux voies, mutuellement exclusives)
+
+    private var calibration: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            Text("CALIBRATION")
+                .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            CalibrationVoiePicker { vma, provenance in commit(vma, provenance: provenance) }
         }
-        .background(Surface.hairline)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.l)
+        .glassCard()
     }
 
-    private func stepButton(_ symbol: String, _ action: @escaping () -> Void) -> some View {
-        Button {
-            Haptic.selection()
-            withAnimation(.master(Duration.micro)) { action() }
-        } label: {
-            Image(systemName: symbol)
-                .font(.headline)
-                .foregroundStyle(Color.laneWhite)
-                .frame(width: Touch.min, height: Touch.min)
-                .background(Color.carbon2)
+    private func commit(_ vma: Double, provenance: VMAProvenance) {
+        withAnimation(.master(Duration.micro)) {
+            profile.vma = min(25, max(8, vma))
+            profile.provenance = provenance
+            profile.updatedAt = .now
         }
-        .buttonStyle(.plain)
-    }
-
-    private func setVMA(_ value: Double) {
-        profile.vma = min(25, max(8, (value * 2).rounded() / 2))
-        profile.updatedAt = .now
+        Haptic.done()
     }
 
     // MARK: Zones + spectre thermique

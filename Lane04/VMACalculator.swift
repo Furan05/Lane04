@@ -16,6 +16,10 @@ enum VMACalculator {
     /// Tolérance par défaut appliquée autour d'une cible, en points de % VMA.
     static let tolerancePercent: Double = 2.5
 
+    /// Demi-Cooper : VMA (km/h) = distance parcourue en 6 min (m) / 100.
+    /// C'est la voie de MESURE — l'instrument montre sa formule dans l'UI.
+    static func vmaFromHalfCooper(meters: Double) -> Double { meters / 100 }
+
     /// Vitesse (m/s) à un pourcentage donné de la VMA.
     ///
     /// - Parameters:

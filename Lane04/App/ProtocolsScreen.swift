@@ -149,6 +149,7 @@ struct ProtocolCell: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack {
                 TagBadge(discipline: proto.discipline)
+                if proto.isTest { StatusBadge("TEST") }
                 Spacer()
                 StateBadge(state: proto.state)
             }
@@ -235,9 +236,12 @@ private struct TemplateRow: View {
         let totals = WorkoutBuilder.totals(for: template, vma: vma)
         HStack {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(template.name)
-                    .font(.bodyBrand)
-                    .foregroundStyle(Color.laneWhite)
+                HStack(spacing: Spacing.s) {
+                    Text(template.name)
+                        .font(.bodyBrand)
+                        .foregroundStyle(Color.laneWhite)
+                    if template.isTest { StatusBadge("TEST") }
+                }
                 Text("\(Format.distanceKM(totals.distance)) — \(Format.duration(totals.duration))")
                     .font(.data)
                     .foregroundStyle(Color.steel)

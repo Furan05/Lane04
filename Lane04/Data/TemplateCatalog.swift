@@ -53,20 +53,28 @@ enum TemplateCatalog {
         ProtocolBlock(title: title, iterations: iterations, steps: steps)
     }
 
+    /// Effort maximal (test) : durée seule, **aucune cible d'allure** (targetsPace = false)
+    /// → la montre ne dira jamais « trop vite » pendant un test.
+    private static func maxEffort(_ minutes: Double) -> ProtocolStep {
+        ProtocolStep(role: .work, goalKind: .time, goalValue: minutes * min, percentVMA: 100, targetsPace: false)
+    }
+
     /// Assemble un template et fige l'ordre des blocs/pas.
-    private static func make(_ name: String, _ discipline: Discipline, _ summary: String, _ blocks: [ProtocolBlock]) -> RunProtocol {
+    private static func make(_ name: String, _ discipline: Discipline, _ summary: String,
+                             _ blocks: [ProtocolBlock], isTest: Bool = false) -> RunProtocol {
         for (bi, b) in blocks.enumerated() {
             b.order = bi
             for (si, s) in b.steps.enumerated() { s.order = si }
         }
-        return RunProtocol(name: name, discipline: discipline, isTemplate: true, state: .ready, summary: summary, blocks: blocks)
+        return RunProtocol(name: name, discipline: discipline, isTemplate: true, isTest: isTest,
+                           state: .ready, summary: summary, blocks: blocks)
     }
 
     private static let min = 60.0 // secondes par minute (lisibilité)
 
     // MARK: Le catalogue
 
-    /// Construit une nouvelle instance des 24 templates (objets non insérés).
+    /// Construit une nouvelle instance des 31 templates (dont TEST_VMA), non insérés.
     static func templates() -> [RunProtocol] {
         [
             // ── RECUP ──────────────────────────────────────────────
@@ -129,6 +137,11 @@ enum TemplateCatalog {
                   cooldown()]),
 
             // ── VMA ────────────────────────────────────────────────
+            make("TEST_VMA", .vma, "Test 6 min (demi-Cooper) : cours au maximum, la distance donne ta VMA. Aucune cible d'allure.",
+                 [warmup(15),
+                  blk("EFFORT MAXIMAL · 6 MIN", 1, [maxEffort(6)]),
+                  cooldown(10)],
+                 isTest: true),
             make("VMA courte 2 × 8 × 30/30", .vma, "Deux séries de 8 fractions 30 s vite / 30 s trot, récup 3 min.",
                  [warmup(),
                   blk("SÉRIE 1 · 8 × 30/30", 8, [work(.time, 30, Pct.vmaShort), rest(.time, 30)]),

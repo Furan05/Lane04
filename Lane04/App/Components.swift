@@ -170,6 +170,18 @@ enum Format {
         return f
     }()
     static func dateTime(_ date: Date) -> String { dateTimeFormatter.string(from: date) }
+
+    private static let dayMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd.MM"
+        return f
+    }()
+    static func dayMonth(_ date: Date) -> String { dayMonthFormatter.string(from: date) }
+
+    /// Chrono mm:ss à partir de secondes (saisie course).
+    static func clock(_ seconds: Int) -> String {
+        String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
 }
 
 // MARK: - État vide (le zéro est une donnée, en mono, jamais une excuse)

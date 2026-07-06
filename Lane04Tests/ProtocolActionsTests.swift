@@ -69,13 +69,13 @@ struct ProtocolActionsTests {
 
     @Test func templatesSurviveUserDeletion() throws {
         let ctx = try makeContext()
-        Seeder.seedIfNeeded(ctx)              // 30 templates (socle)
+        Seeder.seedIfNeeded(ctx)              // 31 templates (socle)
         let proto = insertProtocol(ctx)       // + 1 protocole utilisateur
         ProtocolActions.delete(proto, in: ctx)
 
         let templates = try ctx.fetch(FetchDescriptor<RunProtocol>(
             predicate: #Predicate { $0.isTemplate }))
-        #expect(templates.count == 30)        // le catalogue reste intact
+        #expect(templates.count == 31)        // le catalogue reste intact
     }
 
     @Test func duplicateIsNonDestructive() throws {

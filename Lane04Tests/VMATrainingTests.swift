@@ -47,9 +47,9 @@ struct VMATrainingTests {
 
     // MARK: - Catalogue de templates
 
-    @Test func catalogHas30Templates() {
+    @Test func catalogHas31Templates() {
         let templates = TemplateCatalog.templates()
-        #expect(templates.count == 30)
+        #expect(templates.count == 31)
         #expect(templates.allSatisfy { $0.isTemplate })
         #expect(templates.allSatisfy { $0.state == .ready })
         #expect(templates.allSatisfy { !$0.blocks.isEmpty })
@@ -133,8 +133,8 @@ struct VMATrainingTests {
         let after1 = try ctx.fetchCount(FetchDescriptor<RunProtocol>())
         Seeder.seedIfNeeded(ctx)
         let after2 = try ctx.fetchCount(FetchDescriptor<RunProtocol>())
-        #expect(after1 == 30)
-        #expect(after2 == 30)
+        #expect(after1 == 31)
+        #expect(after2 == 31)
     }
 
     @Test func cloneProducesEditableDraftWithoutTouchingTemplate() throws {
@@ -150,5 +150,83 @@ struct VMATrainingTests {
         draft.blocks.forEach { $0.iterations = 99 }
         #expect(source.blocks.allSatisfy { $0.iterations != 99 })
         #expect(source.isTemplate == true)
+    }
+
+    // MARK: - TEST_VMA : effort maximal SANS cible d'allure
+
+    @Test func testVMATemplate_isMarkedTestAndTaggedVMA() throws {
+        let test = try template(named: "TEST_VMA")
+        #expect(test.isTest)
+        #expect(test.discipline == .vma)
+    }
+
+    @Test func testVMA_effortHasNoSpeedRangeAlert() throws {
+        let workout = WorkoutBuilder.customWorkout(for: try template(named: "TEST_VMA"), vma: 16)
+        // Warmup + cooldown présents ; un seul bloc de corps : l'effort maximal.
+        #expect(workout.warmup != nil)
+        #expect(workout.cooldown != nil)
+        #expect(workout.blocks.count == 1)
+        #expect(workout.blocks[0].iterations == 1)
+        #expect(workout.blocks[0].steps.count == 1)
+        // Le cœur du test : la montre ne pose AUCUNE cible d'allure sur l'effort.
+        #expect(workout.blocks[0].steps[0].step.alert == nil)
+    }
+
+    @Test func testVMA_isTheOnlyTestTemplate() {
+        let tests = TemplateCatalog.templates().filter(\.isTest)
+        #expect(tests.count == 1)
+        #expect(tests.first?.name == "TEST_VMA")
+    }
+
+    // MARK: - Mesure : demi-Cooper (VMA = distance 6 min / 100)
+
+    @Test func halfCooper_convertsMetersToVMA() {
+        #expect(abs(VMACalculator.vmaFromHalfCooper(meters: 1400) - 14.0) < Self.epsilon)
+        #expect(abs(VMACalculator.vmaFromHalfCooper(meters: 1720) - 17.2) < Self.epsilon)
+        #expect(abs(VMACalculator.vmaFromHalfCooper(meters: 900) - 9.0) < Self.epsilon)
+    }
+
+    // MARK: - Estimation : coefficient par palier de durée + VMA dérivée
+
+    @Test func estimator_coefficientPaliers_tenK() {
+        // Paliers 10K : < 42:00 rapide 0.90 ; ≤ 52:00 médian 0.87 ; au-delà lent 0.85.
+        #expect(VMAEstimator.coefficient(.tenK, seconds: 2400) == 0.90) // 40:00
+        #expect(VMAEstimator.coefficient(.tenK, seconds: 2520) == 0.87) // 42:00 pile → médian
+        #expect(VMAEstimator.coefficient(.tenK, seconds: 3120) == 0.87) // 52:00 pile → médian
+        #expect(VMAEstimator.coefficient(.tenK, seconds: 3121) == 0.85) // > 52:00 → lent
+    }
+
+    @Test func estimator_coefficientPaliers_fiveKAndSemi() {
+        #expect(VMAEstimator.coefficient(.fiveK, seconds: 1199) == 0.95)
+        #expect(VMAEstimator.coefficient(.fiveK, seconds: 1620) == 0.93)
+        #expect(VMAEstimator.coefficient(.fiveK, seconds: 1621) == 0.91)
+        #expect(VMAEstimator.coefficient(.semi, seconds: 5699) == 0.85)
+        #expect(VMAEstimator.coefficient(.semi, seconds: 6900) == 0.83)
+        #expect(VMAEstimator.coefficient(.semi, seconds: 6901) == 0.81)
+    }
+
+    @Test func estimator_derivesVMA_fastMedianSlow() {
+        // 10K rapide (40:00) : 15 km/h ÷ 0.90 → 16.67 ; plus lent → VMA plus basse.
+        let fast = VMAEstimator.estimate(.tenK, seconds: 2400)
+        let median = VMAEstimator.estimate(.tenK, seconds: 3000) // 50:00 → 12 km/h ÷ 0.87
+        let slow = VMAEstimator.estimate(.tenK, seconds: 3600)   // 60:00 → 10 km/h ÷ 0.85
+        #expect(abs(fast.coefficient - 0.90) < Self.epsilon)
+        #expect(abs(fast.vma - 15.0 / 0.90) < 1e-6)
+        #expect(abs(median.vma - 12.0 / 0.87) < 1e-6)
+        #expect(abs(slow.vma - 10.0 / 0.85) < 1e-6)
+        #expect(fast.vma > median.vma && median.vma > slow.vma)
+    }
+
+    @Test func estimator_zeroTimeIsSafe() {
+        let r = VMAEstimator.estimate(.tenK, seconds: 0)
+        #expect(r.vma == 0) // pas de division par zéro
+    }
+
+    // MARK: - Provenance : défaut non calibré, à 14.0
+
+    @Test func defaultProfile_isUncalibratedAt14() {
+        let profile = OperatorProfile()
+        #expect(profile.vma == 14.0)
+        #expect(profile.provenance == .uncalibrated)
     }
 }

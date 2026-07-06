@@ -62,6 +62,21 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - **Templates non supprimables** : aucune action de suppression dans la bibliothèque — le catalogue est le socle.
 - `ProtocolActions.delete` **ne touche jamais les `RunLog`** (pas de relation ; la trace survit). Logique hors UI dans `Data/ProtocolActions.swift`, couverte par `ProtocolActionsTests`.
 
+### Calibration VMA — MESURE vs ESTIMATION (feature VMA)
+- **`OperatorProfile.provenance`** (`VMAProvenance` : `.calibrated` / `.estimated` / `.uncalibrated`) : l'instrument distingue la mesure de l'estimation. Statut OPERATOR/[BRACKET] : `[CALIBRATED — dd.MM]` (aplat cyan, confirmé) / `[ESTIMATED]` / `[UNCALIBRATED]`.
+- **Défaut 14.0 `[UNCALIBRATED]`** (était 16.0). Coureur médian, jamais flatteur — un défaut haut fausserait la première lecture des zones. `Seeder.ensureOperatorProfile` insère sans argument (14.0/uncalibrated).
+- **Deux voies, jamais deux aplats** : `CalibrationVoiePicker` (dans `App/CalibrationInputs.swift`) est un sélecteur MESURE/ESTIMATION **mutuellement exclusif** — un seul picker, donc un seul `PrimaryActionButton` EMBER visible à la fois (règle absolue n°1). Réutilisé par OPERATOR **et** l'onboarding.
+  - **MESURE** = demi-Cooper : `VMACalculator.vmaFromHalfCooper(meters:)` = `distance / 100`. Formule affichée dans l'UI (« VMA = 1720 / 100 »). Crans 10 m. → `.calibrated`.
+  - **ESTIMATION** = `VMAEstimator` : coefficient (% VMA tenu) par **paliers secs sur le chrono** (pas d'interpolation — l'UI montre le coeff discret réellement utilisé). Barème 5K/10K/SEMI, source consensus coaching FR. `VMA = vitesse / coeff`. → `.estimated`.
+
+### Onboarding — DÉROGATION aux « 3 écrans max » (feature VMA)
+- Le case study §01 dit **3 écrans max**. On passe à **4** : `promesse → CALIBRATION → HealthKit → pairing`. **Dérogation assumée** : la CALIBRATION est en **2e position** mais **skippable en un tap** (« TESTER PLUS TARD » en **contour**, pas un aplat), défaut 14.0 `[UNCALIBRATED]`. Le parcours minimal reste 3 taps — l'écran calibration n'impose rien. Ne pas le repasser à 3 écrans sans reconsidérer l'accès à la VMA dès l'onboarding.
+
+### TEST_VMA — 31e template (feature VMA)
+- **31 templates** (était 30) : ajout de `TEST_VMA` (`[VMA]`, `isTest = true` → badge `[TEST]`). Structure : warmup 15 + « EFFORT MAXIMAL · 6 MIN » (durée seule) + cooldown 10.
+- **Amendement builder** : l'effort de test porte `targetsPace = false` → **aucun `SpeedRangeAlert`** injecté sur le pas d'effort (`WorkoutBuilder.speedAlert` renvoie `nil`). La montre ne dira jamais « trop vite » pendant un test maximal. Couvert par `testVMA_effortHasNoSpeedRangeAlert`.
+- `RunProtocol.isTest` : booléen porté du template au clone (`Seeder.clone`) ; badge `[TEST]` en cellule PROTOCOLS et en ligne de bibliothèque.
+
 ### Contrainte ferme
 - **JAMAIS de cible watchOS** (principe fondateur). Seule exception future possible (V3, sur demande explicite) : complication QUAD. Voir mémoire projet `[[lane04-design-decisions]]`.
 

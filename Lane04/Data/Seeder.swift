@@ -27,7 +27,7 @@ enum Seeder {
     static func ensureOperatorProfile(_ context: ModelContext) {
         let count = (try? context.fetchCount(FetchDescriptor<OperatorProfile>())) ?? 0
         guard count == 0 else { return }
-        context.insert(OperatorProfile(vma: 16.0))
+        context.insert(OperatorProfile()) // vma 14.0, provenance .uncalibrated
         try? context.save()
     }
 
@@ -38,6 +38,7 @@ enum Seeder {
             name: template.name,
             discipline: template.discipline,
             isTemplate: false,
+            isTest: template.isTest,
             state: .draft,
             summary: template.summary,
             blocks: template.blocks
