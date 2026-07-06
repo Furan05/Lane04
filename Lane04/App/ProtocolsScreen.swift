@@ -20,6 +20,7 @@ struct ProtocolsScreen: View {
     private var vma: Double { profiles.first?.vma ?? 16.0 }
 
     @State private var showingLibrary = false
+    @State private var pendingDelete: RunProtocol?   // confirmation pour un [SYNCED]
 
     private var status: String {
         if protocols.isEmpty { return "IDLE" }
@@ -29,8 +30,10 @@ struct ProtocolsScreen: View {
 
     var body: some View {
         NavigationStack {
-            ScreenScaffold(title: "PROTOCOLS", status: status) {
-                VStack(spacing: Spacing.l) {
+            ZStack {
+                Color.void.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: Spacing.l) {
+                    header
                     PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
 
                     if protocols.isEmpty {
@@ -39,15 +42,14 @@ struct ProtocolsScreen: View {
                             metric: "0 PAYLOADS",
                             note: "Compile un protocole depuis un template pour commencer."
                         )
+                        Spacer()
                     } else {
-                        ForEach(protocols) { proto in
-                            NavigationLink(value: proto) {
-                                ProtocolCell(proto: proto, vma: vma)
-                            }
-                            .buttonStyle(PressableStyle())
-                        }
+                        protocolList
                     }
                 }
+                .padding(.horizontal, Grid.margin)
+                .padding(.top, Grid.safeTop)
+                .padding(.bottom, Grid.safeBottom + Touch.min)
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: RunProtocol.self) { proto in
@@ -61,6 +63,78 @@ struct ProtocolsScreen: View {
                 try? modelContext.save()
             }
         }
+        .alert("DELETE PROTOCOL", isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button("DELETE", role: .destructive) {
+                if let proto = pendingDelete { ProtocolActions.delete(proto, in: modelContext) }
+                pendingDelete = nil
+            }
+            Button("CANCEL", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("[SYNCED] sur la montre. Confirmer ?")
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("PROTOCOLS")
+                .font(.titleBrand).foregroundStyle(Color.laneWhite)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Spacer(minLength: Spacing.s)
+            StatusBadge(status).fixedSize()
+        }
+    }
+
+    // Liste en List pour les actions de swipe (grammaire système).
+    private var protocolList: some View {
+        List {
+            ForEach(protocols) { proto in
+                NavigationLink(value: proto) {
+                    ProtocolCell(proto: proto, vma: vma)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: Spacing.xs, leading: 0, bottom: Spacing.xs, trailing: 0))
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    deleteButton(proto)
+                    duplicateButton(proto)
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    deleteButton(proto)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    // DELETE — aplat EMBER (action destructive = signal chaud). Confirme si [SYNCED].
+    private func deleteButton(_ proto: RunProtocol) -> some View {
+        Button(role: .destructive) {
+            if proto.state == .synced {
+                pendingDelete = proto
+            } else {
+                ProtocolActions.delete(proto, in: modelContext)
+            }
+        } label: {
+            Label("DELETE", systemImage: "trash")
+        }
+        .tint(.ember)
+        .accessibilityLabel("Supprimer le protocole")
+    }
+
+    // DUPLICATE — neutre (pas d'aplat d'accent), geste d'itération non destructif.
+    private func duplicateButton(_ proto: RunProtocol) -> some View {
+        Button {
+            ProtocolActions.duplicate(proto, in: modelContext)
+        } label: {
+            Label("DUPLICATE", systemImage: "plus.square.on.square")
+        }
+        .tint(.carbon2)
+        .accessibilityLabel("Dupliquer le protocole")
     }
 }
 
