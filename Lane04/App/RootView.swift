@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - Onglets
 
@@ -20,6 +21,7 @@ enum Tab: String, CaseIterable, Identifiable {
 // MARK: - Racine
 
 struct RootView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var tab: Tab = .protocols
 
     var body: some View {
@@ -38,6 +40,7 @@ struct RootView: View {
             TabBar(selection: $tab)
         }
         .preferredColorScheme(.dark)
+        .task { Seeder.seedIfNeeded(modelContext) }
     }
 }
 
@@ -123,13 +126,31 @@ struct StatusBadge: View {
 // MARK: - Placeholders thémés (Phase 0)
 
 private struct ProtocolsScreen: View {
+    @Query(filter: #Predicate<RunProtocol> { $0.isTemplate }, sort: \RunProtocol.name)
+    private var templates: [RunProtocol]
+
     var body: some View {
         ScreenScaffold(title: "PROTOCOLS", status: "IDLE") {
-            EmptyStateView(
-                headline: "NO PROTOCOL COMPILED",
-                metric: "0 PAYLOADS",
-                note: "Les protocoles arrivent avec ta première compilation."
-            )
+            if templates.isEmpty {
+                EmptyStateView(
+                    headline: "NO PROTOCOL COMPILED",
+                    metric: "0 PAYLOADS",
+                    note: "Les protocoles arrivent avec ta première compilation."
+                )
+            } else {
+                // Phase 1 : preuve du seed. La vraie liste (cellules, tags) arrive en Phase 3.
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    Text("\(templates.count)")
+                        .font(.dataXL).foregroundStyle(Color.laneWhite).metricDigits()
+                    Text("TEMPLATES DISPONIBLES")
+                        .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+                    Text("Clonables en [DRAFT] via COMPILE FROM TEMPLATE — liste en Phase 3.")
+                        .font(.bodyBrand).foregroundStyle(Color.steel)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.l)
+                .glassCard()
+            }
         }
     }
 }
@@ -208,4 +229,8 @@ private struct EmptyStateView: View {
 
 #Preview {
     RootView()
+        .modelContainer(for: [
+            RunProtocol.self, ProtocolBlock.self, ProtocolStep.self,
+            OperatorProfile.self, RunLog.self
+        ], inMemory: true)
 }
