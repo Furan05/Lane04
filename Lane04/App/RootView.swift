@@ -26,6 +26,7 @@ struct RootView: View {
     // Vit ici pour survivre à la disparition de l'éditeur (statut [TX…] persistant).
     @State private var injection = InjectionController()
     @State private var link = LinkController()
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -49,6 +50,13 @@ struct RootView: View {
             Seeder.seedIfNeeded(modelContext)
             Seeder.ensureOperatorProfile(modelContext)
             await link.refresh()
+        }
+        .fullScreenCover(isPresented: Binding(get: { !hasOnboarded }, set: { _ in })) {
+            OnboardingView {
+                hasOnboarded = true
+                Task { await link.refresh() }
+            }
+            .environment(link)
         }
     }
 }
@@ -144,20 +152,6 @@ struct StatusBadge: View {
                 RoundedRectangle(cornerRadius: Radius.badge)
                     .strokeBorder(Surface.hairline, lineWidth: 1)
             }
-    }
-}
-
-// MARK: - LOGS (placeholder — écran réel en Phase 3)
-
-private struct LogsScreen: View {
-    var body: some View {
-        ScreenScaffold(title: "LOGS", status: "30D") {
-            EmptyStateView(
-                headline: "NO DATA LOGGED",
-                metric: "0.0 KM",
-                note: "Les données arrivent avec la première séance."
-            )
-        }
     }
 }
 

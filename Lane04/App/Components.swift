@@ -163,6 +163,13 @@ enum Format {
         let h = t / 3600, m = (t % 3600) / 60, s = t % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
+
+    private static let dateTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM · HH:mm"
+        return f
+    }()
+    static func dateTime(_ date: Date) -> String { dateTimeFormatter.string(from: date) }
 }
 
 // MARK: - État vide (le zéro est une donnée, en mono, jamais une excuse)

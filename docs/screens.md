@@ -2,29 +2,29 @@
 
 Extrait fidèle du case study **§08 Screen Inventory & States** et **§09 Product / UI Kit**.
 
-## État d'avancement (mis à jour fin Phase 3b)
+## État d'avancement (mis à jour fin Phase 3d — les 12 écrans faits)
 
 Légende : ✅ fait · 🟡 partiel/placeholder · ⬜ restant.
 
 | # | Écran | État | Commit |
 |---|---|---|---|
 | — | **Fondations** (Theme, tokens, polices, SwiftData, tab bar) | ✅ | `387e2ff`, `17d6a50` |
-| 01 | ONBOARDING | ⬜ (Phase 3d) | — |
-| 02 | PAIRING WATCH | ⬜ (Phase 3c) | — |
+| 01 | ONBOARDING (3 écrans, promesse/HealthKit/pairing) | ✅ | `3d` |
+| 02 | PAIRING WATCH (QUAD + PAIR) | ✅ | `169ad53` |
 | 03 | ACCUEIL / PROTOCOLS (liste + tags + compile) | ✅ | `d15f055` |
 | 04 | EMPTY / AUCUN PROTOCOLE | ✅ | `d15f055` |
-| 05 | LOGS | 🟡 placeholder (Phase 3d) | `387e2ff` |
-| 06 | EMPTY / AUCUN LOG | 🟡 placeholder | `387e2ff` |
+| 05 | LOGS (trace de transmission — option b) | ✅ | `3d` |
+| 06 | EMPTY / AUCUN LOG | ✅ | `3d` |
 | 07 | CONSOLE (réglages éditables) | ✅ | `d15f055` |
 | 08 | OPERATOR (VMA + zones + spectre) | ✅ | `d15f055`, rampe `b1e2fdd` |
-| 09 | FAULT / MONTRE NON APPAIRÉE | ⬜ (Phase 3c) | — |
-| 10 | FAULT / HEALTHKIT REFUSÉ | ⬜ (Phase 3c) | — |
-| 11 | FAULT / SYNC | 🟡 bannière + RETRY dans l'éditeur ; écran dédié restant (3c) | `bfa010e` |
+| 09 | FAULT / MONTRE NON APPAIRÉE ([NO LINK], hero éteint, cellules 45%) | ✅ | `169ad53` |
+| 10 | FAULT / HEALTHKIT REFUSÉ ([ACCESS DENIED], OPEN SETTINGS) | ✅ | `169ad53` |
+| 11 | FAULT / SYNC (FaultCard cause + RETRY) | ✅ | `bfa010e`, `169ad53` |
 | 12 | SHEET / SÉLECTEUR D'ALLURE | ✅ | `7ec036b` |
-| §09 | PROTOCOL_EDITOR (écran-cœur) | ✅ + hero INJECT 4 états & chorégraphie | `7ec036b`, `bfa010e` |
-| — | TEMPLATE LIBRARY (compile from template, sheet) | ✅ (extra utile) | `d15f055` |
+| §09 | PROTOCOL_EDITOR (écran-cœur + hero 4 états & chorégraphie) | ✅ | `7ec036b`, `bfa010e` |
+| — | TEMPLATE LIBRARY (compile from template, sheet) | ✅ | `d15f055` |
 
-**Reste** : Phase 3c (pairing + faults 09/10/11 dédiés), Phase 3d (LOGS réel + onboarding). Décisions et pièges hérités : voir `docs/session-notes.md`.
+**Les 12 écrans du case study sont réalisés.** Reste (post-V1) : LOGS via HealthKit réel (V2), watchOS interdit (sauf complication QUAD en V3 sur demande). Décisions et pièges : voir `docs/session-notes.md`.
 
 ## Grammaire commune (s'applique à TOUS les écrans)
 

@@ -174,12 +174,16 @@ final class OperatorProfile {
     }
 }
 
-/// Une entrée de LOGS : séance exécutée (données brutes, tabulaires).
+/// Une entrée de LOGS = **trace de transmission** (injection réussie), PAS une séance
+/// courue. On n'affiche que ce qu'on sait : tag + nom du protocole + horodatage.
+/// Les distances/durées sont celles du protocole *prévu* — ne jamais les présenter
+/// comme exécutées (voir docs/session-notes.md ; lecture HealthKit réelle = V2).
 @Model
 final class RunLog {
     var id: UUID
     var date: Date
     var discipline: Discipline
+    var protocolName: String
     var distanceMeters: Double
     var durationSeconds: Double
 
@@ -187,12 +191,14 @@ final class RunLog {
         id: UUID = UUID(),
         date: Date = .now,
         discipline: Discipline,
+        protocolName: String = "",
         distanceMeters: Double,
         durationSeconds: Double
     ) {
         self.id = id
         self.date = date
         self.discipline = discipline
+        self.protocolName = protocolName
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
     }

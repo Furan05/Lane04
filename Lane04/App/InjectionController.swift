@@ -141,6 +141,7 @@ final class InjectionController {
         let count = UserDefaults.standard.integer(forKey: SettingsKey.successfulInjections)
         UserDefaults.standard.set(count + 1, forKey: SettingsKey.successfulInjections)
         context.insert(RunLog(discipline: proto.discipline,
+                              protocolName: proto.name,
                               distanceMeters: totals.distance,
                               durationSeconds: totals.duration))
         try? context.save()
