@@ -22,6 +22,15 @@ enum Seeder {
         try? context.save()
     }
 
+    /// Garantit l'existence d'un unique profil OPERATOR (idempotent).
+    @MainActor
+    static func ensureOperatorProfile(_ context: ModelContext) {
+        let count = (try? context.fetchCount(FetchDescriptor<OperatorProfile>())) ?? 0
+        guard count == 0 else { return }
+        context.insert(OperatorProfile(vma: 16.0))
+        try? context.save()
+    }
+
     /// Copie profonde d'un template vers un nouveau protocole `[DRAFT]` éditable.
     /// Le template source reste intact. L'objet retourné n'est pas inséré.
     static func clone(_ template: RunProtocol) -> RunProtocol {

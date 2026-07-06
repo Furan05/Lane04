@@ -7,7 +7,8 @@
 //    recovery + endurance + sortie longue  → [RECUP]
 //    threshold + race                       → [SEUIL]
 //    vo2max + côtes                         → [VMA]
-//  (TEMPO et FARTLEK restent sans template pour l'instant — à décider.)
+//  [TEMPO] : footing progressif reclassé + TEMPO_20/30/2X15 (Z3).
+//  [FARTLEK] : FARTLEK_30_30 / 1_1 / PYRAMIDE. Les 5 tags sont peuplés.
 //
 //  Un template n'est JAMAIS modifié : il se clone en [DRAFT] (voir Seeder.clone).
 //

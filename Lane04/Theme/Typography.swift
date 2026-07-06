@@ -37,6 +37,8 @@ extension Font {
     static var data: Font { .custom(BrandFont.dataRegular, size: 20, relativeTo: .body) }
     /// LABEL / 11 — JB Mono 400, CAPS, +14 %. Statuts, labels système.
     static var label: Font { .custom(BrandFont.dataRegular, size: 11, relativeTo: .caption2) }
+    /// BUTTON — Archivo Exp 800 / 18. La voix appliquée aux boutons (§05).
+    static var button: Font { .custom(BrandFont.voiceExtraBold, size: 18, relativeTo: .headline) }
 }
 
 extension View {

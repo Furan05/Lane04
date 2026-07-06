@@ -24,8 +24,12 @@ enum Discipline: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     /// Rendu du tag, crochets inclus (les crochets font partie du glyphe, §06).
     var tag: String { "[\(rawValue)]" }
-    /// Contour thermique : EMBER (effort) → CRYO (récupération).
-    var tint: Color { self == .recup ? .cryo : .ember }
+    /// Contour thermique : spectre EMBER (VMA) → CRYO (RECUP), §06.
+    var tint: Color {
+        let spectrum: [Discipline] = [.vma, .seuil, .tempo, .fartlek, .recup]
+        let i = spectrum.firstIndex(of: self) ?? 0
+        return Color.ember.blended(with: .cryo, t: Double(i) / Double(spectrum.count - 1))
+    }
 }
 
 /// Rôle d'un pas. Le vocabulaire système reste anglais (§02).

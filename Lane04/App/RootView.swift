@@ -40,7 +40,10 @@ struct RootView: View {
             TabBar(selection: $tab)
         }
         .preferredColorScheme(.dark)
-        .task { Seeder.seedIfNeeded(modelContext) }
+        .task {
+            Seeder.seedIfNeeded(modelContext)
+            Seeder.ensureOperatorProfile(modelContext)
+        }
     }
 }
 
@@ -81,25 +84,38 @@ private struct TabBar: View {
 struct ScreenScaffold<Content: View>: View {
     let title: String
     let status: String
+    var onBack: (() -> Void)? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         ZStack {
             Color.void.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
+                    if let onBack {
+                        Button(action: onBack) {
+                            Image(systemName: "chevron.left")
+                                .font(.title3)
+                                .foregroundStyle(Color.steel)
+                                .frame(minWidth: Touch.min, minHeight: Touch.min, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Text(title)
                         .font(.titleBrand)
                         .foregroundStyle(Color.laneWhite)
                     Spacer()
                     StatusBadge(status)
                 }
-                content
-                Spacer(minLength: 0)
+                ScrollView {
+                    content
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, Grid.safeBottom + Touch.min)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             }
             .padding(.horizontal, Grid.margin)
             .padding(.top, Grid.safeTop)
-            .padding(.bottom, Grid.safeBottom + Touch.min)
         }
     }
 }
@@ -123,37 +139,7 @@ struct StatusBadge: View {
     }
 }
 
-// MARK: - Placeholders thémés (Phase 0)
-
-private struct ProtocolsScreen: View {
-    @Query(filter: #Predicate<RunProtocol> { $0.isTemplate }, sort: \RunProtocol.name)
-    private var templates: [RunProtocol]
-
-    var body: some View {
-        ScreenScaffold(title: "PROTOCOLS", status: "IDLE") {
-            if templates.isEmpty {
-                EmptyStateView(
-                    headline: "NO PROTOCOL COMPILED",
-                    metric: "0 PAYLOADS",
-                    note: "Les protocoles arrivent avec ta première compilation."
-                )
-            } else {
-                // Phase 1 : preuve du seed. La vraie liste (cellules, tags) arrive en Phase 3.
-                VStack(alignment: .leading, spacing: Spacing.s) {
-                    Text("\(templates.count)")
-                        .font(.dataXL).foregroundStyle(Color.laneWhite).metricDigits()
-                    Text("TEMPLATES DISPONIBLES")
-                        .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
-                    Text("Clonables en [DRAFT] via COMPILE FROM TEMPLATE — liste en Phase 3.")
-                        .font(.bodyBrand).foregroundStyle(Color.steel)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(Spacing.l)
-                .glassCard()
-            }
-        }
-    }
-}
+// MARK: - LOGS (placeholder — écran réel en Phase 3)
 
 private struct LogsScreen: View {
     var body: some View {
@@ -164,66 +150,6 @@ private struct LogsScreen: View {
                 note: "Les données arrivent avec la première séance."
             )
         }
-    }
-}
-
-private struct ConsoleScreen: View {
-    @AppStorage(SettingsKey.txMode) private var txMode = TXMode.ritual.rawValue
-    @AppStorage(SettingsKey.paceUnit) private var paceUnit = PaceUnit.minPerKm.rawValue
-    @AppStorage(SettingsKey.haptics) private var haptics = true
-    @AppStorage(SettingsKey.watchTarget) private var target = WatchTarget.ultra2.rawValue
-
-    var body: some View {
-        ScreenScaffold(title: "CONSOLE", status: "V1.0") {
-            VStack(spacing: 0) {
-                settingRow("TX MODE", txMode)
-                hairline
-                settingRow("UNITS", paceUnit)
-                hairline
-                settingRow("HAPTICS", haptics ? "ON" : "OFF")
-                hairline
-                settingRow("TARGET", target)
-            }
-        }
-    }
-
-    private func settingRow(_ key: String, _ value: String) -> some View {
-        HStack {
-            Text(key).font(.label).tracking(1.5).foregroundStyle(Color.steel)
-            Spacer()
-            Text(value).font(.data).foregroundStyle(Color.laneWhite).metricDigits()
-        }
-        .frame(minHeight: Touch.min)
-    }
-
-    private var hairline: some View {
-        Rectangle().fill(Surface.hairline).frame(height: 1)
-    }
-}
-
-/// Vide conforme : le zéro est une donnée, affiché en mono, jamais une excuse.
-private struct EmptyStateView: View {
-    let headline: String
-    let metric: String
-    let note: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.m) {
-            Text(metric)
-                .font(.dataXL)
-                .foregroundStyle(Color.laneWhite)
-                .metricDigits()
-            Text(headline)
-                .font(.label)
-                .tracking(1.5)
-                .foregroundStyle(Color.steelHi)
-            Text(note)
-                .font(.bodyBrand)
-                .foregroundStyle(Color.steel)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.l)
-        .glassCard()
     }
 }
 
