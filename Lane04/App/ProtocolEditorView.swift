@@ -13,6 +13,10 @@ import SwiftData
 struct ProtocolEditorView: View {
     @Bindable var proto: RunProtocol
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(InjectionController.self) private var injection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(SettingsKey.txMode) private var txMode = TXMode.ritual.rawValue
     @Query private var profiles: [OperatorProfile]
     private var vma: Double { profiles.first?.vma ?? 16.0 }
 
@@ -23,13 +27,19 @@ struct ProtocolEditorView: View {
     }
 
     var body: some View {
-        ScreenScaffold(title: "PROTOCOL", status: proto.state.rawValue, onBack: { dismiss() }) {
-            VStack(spacing: Spacing.l) {
-                consoleHeader
-                ForEach(orderedBlocks) { block in
-                    blockCard(block)
+        ZStack {
+            ScreenScaffold(title: "PROTOCOL", status: injection.status(for: proto), onBack: { dismiss() }) {
+                VStack(spacing: Spacing.l) {
+                    consoleHeader
+                    ForEach(orderedBlocks) { block in
+                        blockCard(block)
+                    }
+                    heroInject
                 }
-                heroInject
+            }
+            // FLASH — l'obturateur du chronométreur (jamais avant la vérité).
+            if isFlashing {
+                Color.white.ignoresSafeArea().transition(.opacity)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -38,16 +48,16 @@ struct ProtocolEditorView: View {
         }
     }
 
+    private var isFlashing: Bool {
+        injection.activeID == proto.persistentModelID && injection.phase == .flashing
+    }
+
     // MARK: Header console (nom + résumé recalculé)
 
     private var consoleHeader: some View {
         let totals = WorkoutBuilder.totals(for: proto, vma: vma)
         return VStack(alignment: .leading, spacing: Spacing.m) {
-            HStack {
-                TagBadge(discipline: proto.discipline)
-                Spacer()
-                StateBadge(state: proto.state)
-            }
+            TagBadge(discipline: proto.discipline)
             Text(proto.name).font(.titleBrand).foregroundStyle(Color.laneWhite)
             HStack(spacing: 0) {
                 summaryTile("DISTANCE", Format.distanceKM(totals.distance))
@@ -172,17 +182,126 @@ struct ProtocolEditorView: View {
         }
     }
 
-    // MARK: Hero (placeholder — chorégraphie en 3b)
+    // MARK: Hero — 4 états (§09) pilotés par le contrôleur d'injection
 
+    @ViewBuilder
     private var heroInject: some View {
+        let active = injection.activeID == proto.persistentModelID
+        let phase: InjectionController.Phase = active ? injection.phase : .idle
         VStack(spacing: Spacing.s) {
-            Text("TARGET: WATCH — [PAIRED]")
-                .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
-            PrimaryActionButton(title: "INJECT PAYLOAD") {
-                // Phase 3b : chorégraphie RITUAL/FAST + WorkoutScheduler.
+            switch phase {
+            case .idle, .delivered:
+                targetLine
+                if case .delivered = phase {
+                    deliveredBar
+                } else {
+                    PrimaryActionButton(title: "INJECT PAYLOAD") { startInjection() }
+                }
+            case .arming, .transferring, .flashing:
+                targetLine
+                InjectingBar(progress: currentProgress, label: "INJECTING \(Int(currentProgress * 100))%")
+            case .fault(let reason):
+                FaultBanner(reason: reason)
+                Button {
+                    injection.acknowledgeFault()
+                    startInjection()
+                } label: {
+                    Text("RETRY INJECT")
+                        .font(.button).foregroundStyle(Color.ember)
+                        .frame(maxWidth: .infinity, minHeight: Touch.min).padding(.vertical, Spacing.m)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.button)
+                                .strokeBorder(Color.ember, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(PressableStyle())
             }
         }
         .padding(.top, Spacing.m)
+    }
+
+    private var targetLine: some View {
+        Text("TARGET: WATCH — [PAIRED]")
+            .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+    }
+
+    private var currentProgress: Double {
+        if case .transferring(let p) = injection.phase { return p }
+        if case .flashing = injection.phase { return 1 }
+        return 0
+    }
+
+    private var deliveredBar: some View {
+        Text("PAYLOAD DELIVERED")
+            .font(.button).foregroundStyle(Color.void)
+            .frame(maxWidth: .infinity, minHeight: Touch.min).padding(.vertical, Spacing.m)
+            .background(Color.cryo, in: RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
+    }
+
+    private func startInjection() {
+        let count = UserDefaults.standard.integer(forKey: SettingsKey.successfulInjections)
+        let forced = txMode == TXMode.fast.rawValue
+        let mode: TXMode = (forced || count >= 9) ? .fast : .ritual // 10ᵉ injection → FAST
+        Task {
+            await injection.inject(proto: proto, vma: vma, mode: mode,
+                                   reduceMotion: reduceMotion, context: modelContext)
+        }
+    }
+}
+
+// MARK: - Hero « INJECTING » (faisceau = progression, % qui respire)
+
+private struct InjectingBar: View {
+    let progress: Double
+    let label: String
+    @State private var breathe = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: Radius.button).fill(Color.ember.opacity(0.3))
+            GeometryReader { g in
+                RoundedRectangle(cornerRadius: Radius.button)
+                    .fill(Color.ember)
+                    .frame(width: max(0, g.size.width * progress))
+                    .animation(.linear(duration: 0.05), value: progress)
+            }
+            Text(label)
+                .font(.button).foregroundStyle(Color.void).metricDigits()
+                .frame(maxWidth: .infinity)
+                .opacity(breathe ? 0.6 : 1)
+        }
+        .frame(height: Touch.min + Spacing.m * 2)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { breathe = true }
+        }
+    }
+}
+
+// MARK: - Bannière de faute (clignotement 1.2 s, cause nommée — écran 11)
+
+private struct FaultBanner: View {
+    let reason: String
+    @State private var blink = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            Text("[SYNC FAULT]")
+                .font(.label).tracking(1.5).foregroundStyle(Color.ember)
+                .opacity(blink ? 0.3 : 1)
+            Text(reason)
+                .font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.l)
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.card)
+                .strokeBorder(Color.ember.opacity(0.5), lineWidth: 1)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { blink = true }
+        }
     }
 }
 

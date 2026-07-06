@@ -23,6 +23,8 @@ enum Tab: String, CaseIterable, Identifiable {
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var tab: Tab = .protocols
+    // Vit ici pour survivre à la disparition de l'éditeur (statut [TX…] persistant).
+    @State private var injection = InjectionController()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -39,6 +41,7 @@ struct RootView: View {
 
             TabBar(selection: $tab)
         }
+        .environment(injection)
         .preferredColorScheme(.dark)
         .task {
             Seeder.seedIfNeeded(modelContext)
@@ -104,8 +107,10 @@ struct ScreenScaffold<Content: View>: View {
                     Text(title)
                         .font(.titleBrand)
                         .foregroundStyle(Color.laneWhite)
-                    Spacer()
-                    StatusBadge(status)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Spacer(minLength: Spacing.s)
+                    StatusBadge(status).fixedSize()
                 }
                 ScrollView {
                     content
