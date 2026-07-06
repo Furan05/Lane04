@@ -4,14 +4,13 @@ Décisions prises **en cours de route**, non écrites dans le case study, que la
 
 ---
 
-## ⚠️ QUESTION OUVERTE À TRANCHER AVANT LA PHASE 3d (LOGS)
+## ✅ DÉCISION LOGS (tranchée) — option (b) maintenant, (a) en V2
 
-**Sémantique des LOGS.** Un `RunLog` est actuellement créé **à l'injection réussie** (`InjectionController.recordSuccess`, `bfa010e`) — mais *injecter n'est pas courir*. Ces km/durées sont ceux du **protocole prévu**, pas d'une séance exécutée. Deux options, à trancher avec l'operator avant de construire l'écran 05 :
+**Le `RunLog` est une trace de transmission, pas une séance courue.** L'instrument ne ment jamais : on n'affiche que ce qu'on sait.
+- **LOGS (V1)** = journal d'**injections** : `[SYNCED]` + nom du protocole + date/heure. **JAMAIS de km ni de chrono prétendus exécutés.** (Le `RunLog` porte `distanceMeters`/`durationSeconds` du protocole *prévu* — ne PAS les présenter comme courus ; s'en tenir au tag + nom + horodatage de transmission.)
+- **Chantier V2 (a)** : lecture **HealthKit** des vraies séances exécutées (`HKWorkout` écrits par l'app Exercice après la course) pour afficher des km/chrono réels. Non fait en V1.
 
-- **(a) LOGS lit HealthKit** — les vraies séances exécutées (workouts `HKWorkout` écrits par l'app Exercice après la course). Fidèle à « données brutes des séances courues », mais dépend d'une autorisation de lecture HealthKit et d'un aller-retour montre→iPhone.
-- **(b) `RunLog` = trace de transmission** — on n'affiche pas des « km courus » mais un journal d'injections (`[VMA] INJECTED 14:58 → WATCH`), sans prétendre à une distance parcourue. Plus honnête vis-à-vis de la donnée réellement possédée, cohérent avec « la marque s'éteint pendant l'effort ».
-
-Tant que ce n'est pas tranché, **ne pas construire l'écran LOGS** ni présenter les `RunLog` comme des séances courues. Le modèle `RunLog` peut être renommé/reciblé selon le choix.
+Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas une excuse).
 
 ---
 

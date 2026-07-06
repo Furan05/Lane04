@@ -81,6 +81,77 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
+// MARK: - QUAD — l'unique indicateur animé (quatre rectangles, §03)
+
+struct QuadIndicator: View {
+    var lit: Int
+    var tint: Color = .ember
+    var barWidth: CGFloat = 12
+    var height: CGFloat = 48
+
+    var body: some View {
+        HStack(spacing: Spacing.s) {
+            ForEach(0..<4, id: \.self) { i in
+                Rectangle() // radius 0 — aucune courbe
+                    .fill(i < lit ? tint : Color.steelDim.opacity(0.4))
+                    .frame(width: barWidth, height: height)
+            }
+        }
+    }
+}
+
+// MARK: - Carte de faute (contour, cause nommée, une seule action de recours)
+
+struct FaultCard: View {
+    let status: String            // système, mono → [STATUS]
+    let cause: String             // ligne système en clair (mono)
+    var detail: String? = nil     // explication française (langue de lecture)
+    var ctaTitle: String? = nil
+    var blinking: Bool = false    // clignotement 1.2 s = faute qui exige une action
+    var action: (() -> Void)? = nil
+
+    @State private var blink = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            Text("[\(status)]")
+                .font(.label).tracking(1.5).foregroundStyle(Color.ember)
+                .opacity(blinking && blink ? 0.3 : 1)
+            Text(cause)
+                .font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail {
+                Text(detail)
+                    .font(.bodyBrand).foregroundStyle(Color.steel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let ctaTitle, let action {
+                Button(action: action) {
+                    Text(ctaTitle)
+                        .font(.button).foregroundStyle(Color.ember)
+                        .frame(maxWidth: .infinity, minHeight: Touch.min).padding(.vertical, Spacing.m)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: Radius.button)
+                                .strokeBorder(Color.ember, lineWidth: 1.5)
+                        }
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.l)
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.card)
+                .strokeBorder(Color.ember.opacity(0.5), lineWidth: 1)
+        }
+        .onAppear {
+            if blinking {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { blink = true }
+            }
+        }
+    }
+}
+
 // MARK: - Formatage des métriques (chasse fixe, majuscules)
 
 enum Format {

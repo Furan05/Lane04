@@ -9,18 +9,22 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ProtocolEditorView: View {
     @Bindable var proto: RunProtocol
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(InjectionController.self) private var injection
+    @Environment(LinkController.self) private var link
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @AppStorage(SettingsKey.txMode) private var txMode = TXMode.ritual.rawValue
     @Query private var profiles: [OperatorProfile]
     private var vma: Double { profiles.first?.vma ?? 16.0 }
 
     @State private var editingStep: ProtocolStep?
+    @State private var showingPairing = false
 
     private var orderedBlocks: [ProtocolBlock] {
         proto.blocks.sorted { $0.order < $1.order }
@@ -28,12 +32,16 @@ struct ProtocolEditorView: View {
 
     var body: some View {
         ZStack {
-            ScreenScaffold(title: "PROTOCOL", status: injection.status(for: proto), onBack: { dismiss() }) {
+            ScreenScaffold(title: "PROTOCOL",
+                           status: link.isReady ? injection.status(for: proto) : link.bracket,
+                           onBack: { dismiss() }) {
                 VStack(spacing: Spacing.l) {
                     consoleHeader
                     ForEach(orderedBlocks) { block in
                         blockCard(block)
                     }
+                    // Sans liaison : cellules à 45 %, hero éteint (écran 09).
+                    .opacity(link.isReady ? 1 : 0.45)
                     heroInject
                 }
             }
@@ -45,6 +53,9 @@ struct ProtocolEditorView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editingStep) { step in
             PaceSheet(step: step, vma: vma)
+        }
+        .sheet(isPresented: $showingPairing) {
+            NavigationStack { PairingView() }
         }
     }
 
@@ -182,42 +193,61 @@ struct ProtocolEditorView: View {
         }
     }
 
-    // MARK: Hero — 4 états (§09) pilotés par le contrôleur d'injection
+    // MARK: Hero — liaison d'abord (09/10), puis injection 4 états (§09)
 
     @ViewBuilder
     private var heroInject: some View {
-        let active = injection.activeID == proto.persistentModelID
-        let phase: InjectionController.Phase = active ? injection.phase : .idle
         VStack(spacing: Spacing.s) {
-            switch phase {
-            case .idle, .delivered:
-                targetLine
-                if case .delivered = phase {
-                    deliveredBar
-                } else {
-                    PrimaryActionButton(title: "INJECT PAYLOAD") { startInjection() }
-                }
-            case .arming, .transferring, .flashing:
-                targetLine
-                InjectingBar(progress: currentProgress, label: "INJECTING \(Int(currentProgress * 100))%")
-            case .fault(let reason):
-                FaultBanner(reason: reason)
-                Button {
-                    injection.acknowledgeFault()
-                    startInjection()
-                } label: {
-                    Text("RETRY INJECT")
-                        .font(.button).foregroundStyle(Color.ember)
-                        .frame(maxWidth: .infinity, minHeight: Touch.min).padding(.vertical, Spacing.m)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: Radius.button)
-                                .strokeBorder(Color.ember, lineWidth: 1.5)
-                        }
-                }
-                .buttonStyle(PressableStyle())
+            if link.isReady {
+                injectionHero
+            } else {
+                linkFault // hero éteint : jamais cliquable sans liaison
             }
         }
         .padding(.top, Spacing.m)
+    }
+
+    /// Écrans 09 (NO LINK) / 10 (ACCESS DENIED) — bannière contour, CTA de recours
+    /// en contour (l'aplat reste réservé à l'injection).
+    @ViewBuilder
+    private var linkFault: some View {
+        switch link.status {
+        case .healthKitDenied:
+            FaultCard(status: "ACCESS DENIED", cause: "HEALTHKIT REQUIRED",
+                      detail: "L'écriture des séances est bloquée. Autorise LANE 04 dans Réglages.",
+                      ctaTitle: "OPEN SETTINGS", action: openSettings)
+        default:
+            FaultCard(status: "NO LINK", cause: "WATCH UNPAIRED",
+                      detail: "Aucune liaison montre. Ouvre l'appairage pour injecter.",
+                      ctaTitle: "OPEN PAIRING", action: { showingPairing = true })
+        }
+    }
+
+    @ViewBuilder
+    private var injectionHero: some View {
+        let active = injection.activeID == proto.persistentModelID
+        let phase: InjectionController.Phase = active ? injection.phase : .idle
+        switch phase {
+        case .idle, .delivered:
+            targetLine
+            if case .delivered = phase {
+                deliveredBar
+            } else {
+                PrimaryActionButton(title: "INJECT PAYLOAD") { startInjection() }
+            }
+        case .arming, .transferring, .flashing:
+            targetLine
+            InjectingBar(progress: currentProgress, label: "INJECTING \(Int(currentProgress * 100))%")
+        case .fault(let reason):
+            // Écran 11 — SYNC FAULT : cause nommée, une seule action.
+            FaultCard(status: "SYNC FAULT", cause: reason,
+                      ctaTitle: "RETRY INJECT", blinking: true,
+                      action: { injection.acknowledgeFault(); startInjection() })
+        }
+    }
+
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
     }
 
     private var targetLine: some View {
@@ -274,33 +304,6 @@ private struct InjectingBar: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
         .onAppear {
             withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { breathe = true }
-        }
-    }
-}
-
-// MARK: - Bannière de faute (clignotement 1.2 s, cause nommée — écran 11)
-
-private struct FaultBanner: View {
-    let reason: String
-    @State private var blink = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
-            Text("[SYNC FAULT]")
-                .font(.label).tracking(1.5).foregroundStyle(Color.ember)
-                .opacity(blink ? 0.3 : 1)
-            Text(reason)
-                .font(.data).foregroundStyle(Color.laneWhite).metricDigits()
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.l)
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.card)
-                .strokeBorder(Color.ember.opacity(0.5), lineWidth: 1)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { blink = true }
         }
     }
 }

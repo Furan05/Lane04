@@ -25,6 +25,7 @@ struct RootView: View {
     @State private var tab: Tab = .protocols
     // Vit ici pour survivre à la disparition de l'éditeur (statut [TX…] persistant).
     @State private var injection = InjectionController()
+    @State private var link = LinkController()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -42,10 +43,12 @@ struct RootView: View {
             TabBar(selection: $tab)
         }
         .environment(injection)
+        .environment(link)
         .preferredColorScheme(.dark)
         .task {
             Seeder.seedIfNeeded(modelContext)
             Seeder.ensureOperatorProfile(modelContext)
+            await link.refresh()
         }
     }
 }
