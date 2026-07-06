@@ -56,6 +56,12 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - La métrique **CHARGE** (index durée × intensité) a été **retirée** du header éditeur : un instrument n'affiche pas un chiffre dont il ne peut pas expliquer la formule. Header = **DISTANCE + DURÉE** uniquement.
 - **Candidate V2** : une vraie métrique de charge (TRIMP ou équivalent, **formule documentée**), à introduire seulement après usage réel sur device.
 
+### Actions de cellule PROTOCOLS (`0e7d8c3`)
+- **DELETE** (swipe leading + trailing) = aplat **EMBER** (destructif = signal chaud). Confirmation par alerte **uniquement si `[SYNCED]`** (vit peut-être sur la montre) ; un `[DRAFT]` se supprime sans confirmation.
+- **DUPLICATE** = tint **neutre `carbon2`**, PAS l'ember — choix assumé : `swipeActions` SwiftUI ne fait que des boutons pleins, donc « contour » = interprété comme « ne dépense pas l'accent ». Ne pas le repasser en ember (ce serait deux aplats d'accent). Clone → `[DRAFT] NOM_COPY`.
+- **Templates non supprimables** : aucune action de suppression dans la bibliothèque — le catalogue est le socle.
+- `ProtocolActions.delete` **ne touche jamais les `RunLog`** (pas de relation ; la trace survit). Logique hors UI dans `Data/ProtocolActions.swift`, couverte par `ProtocolActionsTests`.
+
 ### Contrainte ferme
 - **JAMAIS de cible watchOS** (principe fondateur). Seule exception future possible (V3, sur demande explicite) : complication QUAD. Voir mémoire projet `[[lane04-design-decisions]]`.
 
