@@ -12,7 +12,9 @@ import SwiftData
 struct Lane04App: App {
     init() {
         FontRegistrar.registerAll()
-        // Seam de test UI : sauter l'onboarding pour atteindre directement l'app.
+        #if DEBUG
+        // Seam de test UI (DEBUG uniquement — jamais dans le binaire de prod, même
+        // inerte) : pilote `hasOnboarded` via arguments de lancement.
         let args = ProcessInfo.processInfo.arguments
         if args.contains("-uitest-skip-onboarding") {
             UserDefaults.standard.set(true, forKey: "hasOnboarded")
@@ -20,6 +22,7 @@ struct Lane04App: App {
         if args.contains("-uitest-force-onboarding") {
             UserDefaults.standard.set(false, forKey: "hasOnboarded")
         }
+        #endif
     }
 
     var body: some Scene {
