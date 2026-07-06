@@ -96,4 +96,59 @@ struct ProtocolActionsTests {
         copy.blocks.forEach { $0.iterations = 99 }
         #expect(source.blocks.allSatisfy { $0.iterations != 99 })
     }
+
+    // MARK: - Raccourci CALIBRATION → TEST_VMA (pont vers le test)
+
+    /// Insère le template TEST_VMA seul (comme après un seed), sans les autres.
+    @discardableResult
+    private func insertTestTemplate(_ ctx: ModelContext) -> RunProtocol {
+        let template = try! #require(TemplateCatalog.templates().first { $0.isTest })
+        ctx.insert(template)
+        try? ctx.save()
+        return template
+    }
+
+    @Test func prepareTestVMA_clonesTemplateAsEditableDraft() throws {
+        let ctx = try makeContext()
+        insertTestTemplate(ctx)
+
+        let draft = try #require(ProtocolActions.prepareTestVMA(in: ctx))
+
+        #expect(draft.isTemplate == false)   // éditable, pas le socle
+        #expect(draft.isTest)                 // reste un test → badge [TEST]
+        #expect(draft.state == .draft)
+        #expect(draft.discipline == .vma)
+        // Deux protocoles : le template socle + le [DRAFT] cloné.
+        #expect(try ctx.fetchCount(FetchDescriptor<RunProtocol>()) == 2)
+    }
+
+    @Test func prepareTestVMA_isIdempotent_noPhantomDuplicates() throws {
+        let ctx = try makeContext()
+        insertTestTemplate(ctx)
+
+        let first = try #require(ProtocolActions.prepareTestVMA(in: ctx))
+        let second = try #require(ProtocolActions.prepareTestVMA(in: ctx))
+
+        // Même instance réutilisée — pas d'accumulation de tests fantômes.
+        #expect(first.id == second.id)
+        let userTests = try ctx.fetch(FetchDescriptor<RunProtocol>(
+            predicate: #Predicate { !$0.isTemplate && $0.isTest }))
+        #expect(userTests.count == 1)
+    }
+
+    @Test func prepareTestVMA_reusesSyncedTestNotYetRun() throws {
+        let ctx = try makeContext()
+        insertTestTemplate(ctx)
+
+        // Un test déjà cloné puis injecté ([SYNCED]) : on le réutilise, pas de re-clone.
+        let existing = ProtocolActions.prepareTestVMA(in: ctx)!
+        existing.state = .synced
+        try ctx.save()
+
+        let again = try #require(ProtocolActions.prepareTestVMA(in: ctx))
+        #expect(again.id == existing.id)
+        let userTests = try ctx.fetch(FetchDescriptor<RunProtocol>(
+            predicate: #Predicate { !$0.isTemplate && $0.isTest }))
+        #expect(userTests.count == 1)
+    }
 }

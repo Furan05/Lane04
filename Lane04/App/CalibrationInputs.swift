@@ -22,6 +22,9 @@ enum CalibrationVoie: String, CaseIterable, Identifiable {
 /// l'onboarding. `onCommit` reçoit la VMA retenue + sa provenance.
 struct CalibrationVoiePicker: View {
     var onCommit: (Double, VMAProvenance) -> Void
+    /// Recours de la voie MESURE : préparer le protocole de test VMA. Optionnel —
+    /// s'il est nil, la ligne de recours n'apparaît pas.
+    var onPrepareTest: (() -> Void)? = nil
 
     @State private var voie: CalibrationVoie = .measure
 
@@ -30,7 +33,7 @@ struct CalibrationVoiePicker: View {
             selector
             switch voie {
             case .measure:
-                MeasurePicker { onCommit($0, .calibrated) }
+                MeasurePicker(onMeasure: { onCommit($0, .calibrated) }, onPrepareTest: onPrepareTest)
             case .estimate:
                 EstimationPicker { vma, _ in onCommit(vma, .estimated) }
             }
@@ -120,6 +123,9 @@ struct EstimationPicker: View {
 
 struct MeasurePicker: View {
     var onMeasure: (Double) -> Void
+    /// Pont vers le test : préparer TEST_VMA quand l'utilisateur n'a pas encore
+    /// sa distance 6:00. Optionnel — nil = pas de ligne de recours.
+    var onPrepareTest: (() -> Void)? = nil
 
     @State private var meters: Int = 1400 // → VMA 14.0
 
@@ -144,6 +150,14 @@ struct MeasurePicker: View {
                 .font(.data).foregroundStyle(Color.steelHi).metricDigits()
 
             PrimaryActionButton(title: "VALIDATE") { onMeasure(vma) }
+
+            // Recours EN CONTOUR (l'aplat de l'écran reste sur VALIDATE) : pont vers
+            // le test quand la distance 6:00 n'est pas encore connue.
+            if let onPrepareTest {
+                OutlineActionButton(title: "PAS ENCORE TESTÉ ? → INJECT TEST_VMA",
+                                    action: onPrepareTest)
+                    .accessibilityLabel("Préparer le protocole de test VMA")
+            }
         }
     }
 }

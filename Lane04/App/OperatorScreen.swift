@@ -32,6 +32,9 @@ private struct OperatorContent: View {
     @Bindable var profile: OperatorProfile
     let onBack: () -> Void
 
+    @Environment(\.modelContext) private var modelContext
+    @Environment(AppRouter.self) private var router
+
     var body: some View {
         ScreenScaffold(title: "OPERATOR", status: statusText, onBack: onBack) {
             VStack(spacing: Spacing.xl) {
@@ -92,11 +95,21 @@ private struct OperatorContent: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             Text("CALIBRATION")
                 .font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
-            CalibrationVoiePicker { vma, provenance in commit(vma, provenance: provenance) }
+            CalibrationVoiePicker(
+                onCommit: { vma, provenance in commit(vma, provenance: provenance) },
+                onPrepareTest: prepareAndOpenTest
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
+    }
+
+    /// Clone-ou-réutilise TEST_VMA (idempotent) et ouvre son éditeur par le chemin
+    /// nominal — le hero INJECT PAYLOAD y fait le reste. Aucun flux parallèle.
+    private func prepareAndOpenTest() {
+        guard let test = ProtocolActions.prepareTestVMA(in: modelContext) else { return }
+        router.openEditor(test)
     }
 
     private func commit(_ vma: Double, provenance: VMAProvenance) {

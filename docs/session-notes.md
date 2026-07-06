@@ -77,6 +77,14 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - **Amendement builder** : l'effort de test porte `targetsPace = false` → **aucun `SpeedRangeAlert`** injecté sur le pas d'effort (`WorkoutBuilder.speedAlert` renvoie `nil`). La montre ne dira jamais « trop vite » pendant un test maximal. Couvert par `testVMA_effortHasNoSpeedRangeAlert`.
 - `RunProtocol.isTest` : booléen porté du template au clone (`Seeder.clone`) ; badge `[TEST]` en cellule PROTOCOLS et en ligne de bibliothèque.
 
+### Pont CALIBRATION → TEST_VMA (raccourci MESURE)
+- **Friction résolue** : la voie MESURE demande la distance du test 6:00 sans offrir de chemin vers le test. Ajout d'une **ligne de recours EN CONTOUR** sous VALIDATE : « PAS ENCORE TESTÉ ? → INJECT TEST_VMA » (`OutlineActionButton`, jamais un aplat — l'aplat de l'écran reste sur VALIDATE). Présente en **OPERATOR et onboarding**. VoiceOver : « Préparer le protocole de test VMA ».
+- **`ProtocolActions.prepareTestVMA(in:)`** : **idempotent**. Réutilise un `TEST_VMA` non-template déjà cloné ([DRAFT] ou [SYNCED], le plus récent) s'il existe — sinon clone le template via `Seeder.clone`. **Pas d'accumulation de tests fantômes.** Aucune logique d'injection nouvelle.
+- **Chemin nominal, pas de flux parallèle** : le tap ouvre l'**éditeur** du test (hero INJECT PAYLOAD existant fait le reste).
+  - **OPERATOR** : `AppRouter` (`@Observable`, dans `App/AppRouter.swift`) détenu par `RootView`, porte `tab` + `protocolsPath`. `openEditor(_:)` bascule sur PROTOCOLS et pousse l'éditeur dans **le** `navigationDestination` existant. `RootView` pilote l'onglet via `router.tab` ; `ProtocolsScreen` lie sa `NavigationStack(path:)` à `router.protocolsPath`. **Ne pas** réintroduire un `@State tab` local dans RootView ni un second éditeur.
+  - **Onboarding** : **option (b) choisie** (la moins fragile) — le tap clone TEST_VMA **en silence** (idempotent) et **poursuit l'onboarding** (HealthKit + pairing restent requis pour injecter). Pas de note transitoire inter-écrans (état fragile) : l'utilisateur retrouve TEST_VMA `[DRAFT]` dans PROTOCOLS, repérable au badge `[TEST]`. Ne PAS faire sauter l'onboarding vers l'éditeur (on ne peut pas injecter sans liaison).
+- **Seam de test UI** : `Lane04App` honore `-uitest-skip-onboarding` / `-uitest-force-onboarding` (écrit `hasOnboarded`). Couvert par `Lane04UITests/CalibrationShortcutUITests` (raccourci → éditeur ; recours présent onboarding). Idempotence/clone en unitaire (`ProtocolActionsTests`).
+
 ### Contrainte ferme
 - **JAMAIS de cible watchOS** (principe fondateur). Seule exception future possible (V3, sur demande explicite) : complication QUAD. Voir mémoire projet `[[lane04-design-decisions]]`.
 

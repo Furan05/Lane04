@@ -28,4 +28,30 @@ enum ProtocolActions {
         context.delete(proto)
         try? context.save()
     }
+
+    /// Prépare le protocole de test VMA pour injection via le chemin nominal
+    /// (éditeur → hero INJECT PAYLOAD). **Idempotent** : réutilise un `TEST_VMA`
+    /// déjà cloné ([DRAFT] ou [SYNCED], pas encore couru) s'il en existe un —
+    /// jamais d'accumulation de tests fantômes. Sinon clone le template.
+    /// Réutilise `Seeder.clone`, aucune logique d'injection nouvelle.
+    @discardableResult
+    static func prepareTestVMA(in context: ModelContext) -> RunProtocol? {
+        // 1. Un test déjà cloné par l'utilisateur ? (le plus récent d'abord)
+        let existing = FetchDescriptor<RunProtocol>(
+            predicate: #Predicate { !$0.isTemplate && $0.isTest },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        if let found = try? context.fetch(existing), let test = found.first {
+            return test
+        }
+        // 2. Sinon, cloner le template TEST_VMA en [DRAFT].
+        let templateFetch = FetchDescriptor<RunProtocol>(
+            predicate: #Predicate { $0.isTemplate && $0.isTest }
+        )
+        guard let template = (try? context.fetch(templateFetch))?.first else { return nil }
+        let draft = Seeder.clone(template)
+        context.insert(draft)
+        try? context.save()
+        return draft
+    }
 }

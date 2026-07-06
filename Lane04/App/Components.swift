@@ -72,6 +72,31 @@ struct PrimaryActionButton: View {
     }
 }
 
+/// Bouton de recours EN CONTOUR (hairline, jamais d'aplat) — ne dépense pas
+/// l'accent de l'écran. Réservé aux voies secondaires (« plus tard », raccourcis).
+struct OutlineActionButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
+            Text(title)
+                .font(.label).tracking(1.5)
+                .foregroundStyle(Color.steel)
+                .frame(maxWidth: .infinity, minHeight: Touch.min)
+                .padding(.vertical, Spacing.s)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.button)
+                        .strokeBorder(Surface.hairline, lineWidth: 1)
+                }
+        }
+        .buttonStyle(PressableStyle())
+    }
+}
+
 /// Style pressé conforme : scale 0.97, courbe maîtresse, 90 ms. Transform only.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration configuration: Configuration) -> some View {

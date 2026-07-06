@@ -11,6 +11,7 @@ import SwiftData
 
 struct ProtocolsScreen: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppRouter.self) private var router
 
     // Les protocoles de l'utilisateur (pas les templates).
     @Query(filter: #Predicate<RunProtocol> { !$0.isTemplate }, sort: \RunProtocol.createdAt, order: .reverse)
@@ -29,7 +30,8 @@ struct ProtocolsScreen: View {
     }
 
     var body: some View {
-        NavigationStack {
+        @Bindable var router = router
+        return NavigationStack(path: $router.protocolsPath) {
             ZStack {
                 Color.void.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: Spacing.l) {

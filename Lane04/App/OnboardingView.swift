@@ -61,10 +61,19 @@ struct OnboardingView: View {
                 Text("Ta VMA cale toutes tes allures. Mesure-la (test 6 min) ou estime-la d'une course récente. Sinon, on part sur 14.0 par défaut — tu calibreras plus tard depuis OPERATOR.")
                     .font(.bodyBrand).foregroundStyle(Color.steel)
                     .fixedSize(horizontal: false, vertical: true)
-                CalibrationVoiePicker { vma, provenance in
-                    commitVMA(vma, provenance: provenance)
-                    advance(to: 2)
-                }
+                CalibrationVoiePicker(
+                    onCommit: { vma, provenance in
+                        commitVMA(vma, provenance: provenance)
+                        advance(to: 2)
+                    },
+                    // Pas encore testé : on clone TEST_VMA en silence (idempotent) et on
+                    // poursuit l'onboarding — HealthKit + pairing restent requis pour
+                    // injecter. L'utilisateur retrouve TEST_VMA [DRAFT] dans PROTOCOLS.
+                    onPrepareTest: {
+                        ProtocolActions.prepareTestVMA(in: modelContext)
+                        advance(to: 2)
+                    }
+                )
             }
         } cta: {
             Button("TESTER PLUS TARD") { advance(to: 2) }

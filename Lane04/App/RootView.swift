@@ -22,18 +22,20 @@ enum Tab: String, CaseIterable, Identifiable {
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var tab: Tab = .protocols
+    // Navigation partagée (onglet + pile PROTOCOLS) : pilotable depuis OPERATOR.
+    @State private var router = AppRouter()
     // Vit ici pour survivre à la disparition de l'éditeur (statut [TX…] persistant).
     @State private var injection = InjectionController()
     @State private var link = LinkController()
     @AppStorage("hasOnboarded") private var hasOnboarded = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        @Bindable var router = router
+        return ZStack(alignment: .bottom) {
             Color.void.ignoresSafeArea()
 
             Group {
-                switch tab {
+                switch router.tab {
                 case .protocols: ProtocolsScreen()
                 case .logs: LogsScreen()
                 case .console: ConsoleScreen()
@@ -41,8 +43,9 @@ struct RootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            TabBar(selection: $tab)
+            TabBar(selection: $router.tab)
         }
+        .environment(router)
         .environment(injection)
         .environment(link)
         .preferredColorScheme(.dark)
