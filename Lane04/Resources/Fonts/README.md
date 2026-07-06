@@ -1,16 +1,17 @@
 # Resources/Fonts
 
-Déposer ici les fichiers de police de marque (licence **OFL**), avec leur `OFL.txt`.
+Polices de marque (licence **OFL**), intégrées depuis les sources officielles.
 
-Attendu :
+| Fichier | Source | Axes | Usage |
+|---|---|---|---|
+| `Archivo-VariableFont.ttf` | [google/fonts · ofl/archivo](https://github.com/google/fonts/tree/main/ofl/archivo) | `wght` + `wdth` | Voix (titres, nav, boutons). **Expanded = `wdth` 125**. |
+| `JetBrainsMono-VariableFont.ttf` | [JetBrains/JetBrainsMono v2.304](https://github.com/JetBrains/JetBrainsMono/releases) | `wght` | Donnée (métriques, chiffres tabulaires natifs). |
 
-- **Archivo** — variable (axes weight + width, pour obtenir *Expanded*). Voix : titres, navigation, boutons.
-- **JetBrains Mono** — Regular + Medium. Donnée : toute valeur métrique (chiffres tabulaires).
+Licences : `OFL-Archivo.txt`, `OFL-JetBrainsMono.txt`.
 
-Une fois déposés :
+## Intégration (faite)
 
-1. Ils sont **automatiquement inclus** dans le bundle (groupe Xcode synchronisé) et enregistrés au lancement par `FontRegistrar.registerAll()`.
-2. Vérifier en DEBUG le log `[LANE04]` qui liste les familles/noms PostScript réellement disponibles.
-3. Ajuster si besoin les noms dans `BrandFont` (`Lane04/Theme/Typography.swift`) pour qu'ils correspondent exactement — notamment la sélection de la largeur *Expanded* sur la variable font Archivo.
-
-Tant que les fichiers sont absents, `Font.custom` retombe sur SF Pro / SF Mono : l'app reste fonctionnelle, la typographie de marque n'est simplement pas encore appliquée.
+- **Bundle** : les `.ttf` sont inclus automatiquement (groupe Xcode synchronisé) — pas d'entrée `.pbxproj` ni `UIAppFonts` nécessaire.
+- **Registration** : `FontRegistrar.registerAll()` les enregistre au lancement (`CTFontManagerRegisterFontsForURL`, scope process).
+- **Familles réelles** (log DEBUG `[LANE04]`) : `"Archivo"` et `"JetBrains Mono"`.
+- **Pilotage des axes** : `Typography.swift` construit les `Font.*` via `UIFontDescriptor` (axes `wght`/`wdth`) puis `UIFontMetrics` (Dynamic Type). L'axe `wdth 125` donne l'Expanded sur display/title/button.
