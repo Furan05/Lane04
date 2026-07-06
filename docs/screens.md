@@ -2,7 +2,10 @@
 
 Extrait fidèle du case study **§08 Screen Inventory & States** et **§09 Product / UI Kit**.
 
-## État d'avancement (mis à jour fin Phase 3d — les 12 écrans faits)
+## État d'avancement — **12/12 ✅** (fin Phase 3d)
+
+> La V1 des écrans est complète. **La suite se joue sur device réel** (montre appairée : injection réelle, autorisations, aller-retour Exercice), plus en simulateur.
+
 
 Légende : ✅ fait · 🟡 partiel/placeholder · ⬜ restant.
 

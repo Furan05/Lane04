@@ -73,28 +73,11 @@ struct ProtocolEditorView: View {
             HStack(spacing: 0) {
                 summaryTile("DISTANCE", Format.distanceKM(totals.distance))
                 summaryTile("DURÉE", Format.duration(totals.duration))
-                summaryTile("CHARGE", "\(load)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
-    }
-
-    /// Charge = index durée × intensité (min × %VMA/100), tabulaire.
-    private var load: Int {
-        var total = 0.0
-        for b in proto.blocks {
-            for s in b.steps where s.goalKind == .time {
-                total += Double(b.iterations) * (s.goalValue / 60) * (s.percentVMA / 100)
-            }
-            for s in b.steps where s.goalKind == .distance {
-                let v = VMACalculator.speed(vma: vma, percent: s.percentVMA)
-                let minutes = v > 0 ? (s.goalValue / v) / 60 : 0
-                total += Double(b.iterations) * minutes * (s.percentVMA / 100)
-            }
-        }
-        return Int(total.rounded())
     }
 
     private func summaryTile(_ label: String, _ value: String) -> some View {

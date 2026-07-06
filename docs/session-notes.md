@@ -52,8 +52,9 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - `Font.*` pilotent les axes via `UIFontDescriptor` (**Expanded = `wdth 125`**) + `UIFontMetrics` (Dynamic Type). Familles réelles : `"Archivo"`, `"JetBrains Mono"`.
 - `Font.button` ajouté (7e style hors échelle des 6 — la « voix » appliquée aux boutons). `Color.laneWhite` (car `Color.white` = système) et enum `Surface` (car `Material` = SwiftUI) : renommages assumés.
 
-### Métrique inventée
-- **CHARGE** (header éditeur) = index durée × intensité (Σ min × %VMA/100). N'existe pas dans le case study ; à valider ou retirer si l'operator préfère.
+### Métrique de charge — RETIRÉE en V1
+- La métrique **CHARGE** (index durée × intensité) a été **retirée** du header éditeur : un instrument n'affiche pas un chiffre dont il ne peut pas expliquer la formule. Header = **DISTANCE + DURÉE** uniquement.
+- **Candidate V2** : une vraie métrique de charge (TRIMP ou équivalent, **formule documentée**), à introduire seulement après usage réel sur device.
 
 ### Contrainte ferme
 - **JAMAIS de cible watchOS** (principe fondateur). Seule exception future possible (V3, sur demande explicite) : complication QUAD. Voir mémoire projet `[[lane04-design-decisions]]`.
