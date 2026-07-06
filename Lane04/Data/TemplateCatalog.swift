@@ -24,6 +24,14 @@ enum TemplateCatalog {
         static let vmaShort = 105.0, vmaTop = 108.0
     }
 
+    /// Raccourci zones → % VMA (source unique : TrainingZone).
+    private enum Z {
+        static let z1 = TrainingZone.z1.percentVMA
+        static let z3 = TrainingZone.z3.percentVMA
+        static let z4 = TrainingZone.z4.percentVMA
+        static let z5 = TrainingZone.z5.percentVMA
+    }
+
     // MARK: Fabriques de pas / blocs
 
     private static func work(_ kind: GoalKind, _ value: Double, _ pct: Double) -> ProtocolStep {
@@ -71,8 +79,6 @@ enum TemplateCatalog {
                  [blk("SORTIE LONGUE", 1, [work(.time, 75*min, Pct.long)])]),
             make("Endurance active 40 min", .recup, "40 min soutenues, haut de l'endurance fondamentale.",
                  [blk("FOOTING ACTIF", 1, [work(.time, 40*min, Pct.active)])]),
-            make("Footing progressif 40 min", .recup, "Trois paliers de 15/15/10 min de plus en plus rapides.",
-                 [blk("PROGRESSIF", 1, [work(.time, 15*min, Pct.endur), work(.time, 15*min, 72), work(.time, 10*min, Pct.active)])]),
 
             // ── SEUIL ──────────────────────────────────────────────
             make("Seuil continu 20 min", .seuil, "20 min d'une traite au seuil, tenue d'allure.",
@@ -93,6 +99,32 @@ enum TemplateCatalog {
                  [warmup(),
                   blk("BLOC SEUIL", 1, [work(.time, 20*min, Pct.semi), rest(.time, 3*min, Pct.decr)]),
                   blk("3 × 1000 M", 3, [work(.distance, 1000, Pct.tenK), rest(.time, 2*min, Pct.decr)]),
+                  cooldown()]),
+
+            // ── TEMPO ──────────────────────────────────────────────
+            make("Footing progressif 40 min", .tempo, "Trois paliers de 15/15/10 min, termine à allure tempo.",
+                 [blk("PROGRESSIF", 1, [work(.time, 15*min, Pct.endur), work(.time, 15*min, 72), work(.time, 10*min, Pct.active)])]),
+            make("TEMPO_20", .tempo, "20 min en continu à allure tempo (Z3).",
+                 [warmup(), blk("TEMPO 20 MIN", 1, [work(.time, 20*min, Z.z3)]), cooldown()]),
+            make("TEMPO_30", .tempo, "30 min en continu à allure tempo (Z3).",
+                 [warmup(), blk("TEMPO 30 MIN", 1, [work(.time, 30*min, Z.z3)]), cooldown()]),
+            make("TEMPO_2X15", .tempo, "Deux blocs de 15 min à allure tempo (Z3), récup 3 min.",
+                 [warmup(), blk("2 × 15 MIN", 2, [work(.time, 15*min, Z.z3), rest(.time, 3*min, Pct.decr)]), cooldown()]),
+
+            // ── FARTLEK ────────────────────────────────────────────
+            make("FARTLEK_30_30", .fartlek, "Jeu d'allures : 12 × (30 s Z5 / 30 s Z1).",
+                 [warmup(), blk("12 × 30/30", 12, [work(.time, 30, Z.z5), rest(.time, 30, Z.z1)]), cooldown()]),
+            make("FARTLEK_1_1", .fartlek, "Jeu d'allures : 10 × (1 min Z4 / 1 min Z1).",
+                 [warmup(), blk("10 × 1/1", 10, [work(.time, 1*min, Z.z4), rest(.time, 1*min, Z.z1)]), cooldown()]),
+            make("FARTLEK_PYRAMIDE", .fartlek, "Pyramide 1-2-3-2-1 min à Z4, récup = durée de l'effort.",
+                 [warmup(),
+                  blk("PYRAMIDE 1-2-3-2-1", 1, [
+                    work(.time, 1*min, Z.z4), rest(.time, 1*min, Z.z1),
+                    work(.time, 2*min, Z.z4), rest(.time, 2*min, Z.z1),
+                    work(.time, 3*min, Z.z4), rest(.time, 3*min, Z.z1),
+                    work(.time, 2*min, Z.z4), rest(.time, 2*min, Z.z1),
+                    work(.time, 1*min, Z.z4)
+                  ]),
                   cooldown()]),
 
             // ── VMA ────────────────────────────────────────────────

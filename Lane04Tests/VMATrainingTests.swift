@@ -47,21 +47,25 @@ struct VMATrainingTests {
 
     // MARK: - Catalogue de templates
 
-    @Test func catalogHas24Templates() {
+    @Test func catalogHas30Templates() {
         let templates = TemplateCatalog.templates()
-        #expect(templates.count == 24)
+        #expect(templates.count == 30)
         #expect(templates.allSatisfy { $0.isTemplate })
         #expect(templates.allSatisfy { $0.state == .ready })
         #expect(templates.allSatisfy { !$0.blocks.isEmpty })
     }
 
-    @Test func nomenclatureIsStrict() {
-        // Aucune filière hors des 5 tags autorisés.
-        let allowed = Set(Discipline.allCases)
+    @Test func nomenclatureCoversAllFiveTags() {
         let used = Set(TemplateCatalog.templates().map(\.discipline))
-        #expect(used.isSubset(of: allowed))
-        // Le remap ne produit que VMA / SEUIL / RECUP (TEMPO & FARTLEK restent vides).
-        #expect(used == [.vma, .seuil, .recup])
+        // Les 5 tags — et seulement eux — sont peuplés.
+        #expect(used == Set(Discipline.allCases))
+    }
+
+    @Test func eachDisciplineHasAtLeastOneTemplate() {
+        let byTag = Dictionary(grouping: TemplateCatalog.templates(), by: \.discipline)
+        for tag in Discipline.allCases {
+            #expect((byTag[tag]?.count ?? 0) >= 1, "\(tag.rawValue) vide")
+        }
     }
 
     // MARK: - Builder WorkoutKit (comportement porté à l'identique)
@@ -129,8 +133,8 @@ struct VMATrainingTests {
         let after1 = try ctx.fetchCount(FetchDescriptor<RunProtocol>())
         Seeder.seedIfNeeded(ctx)
         let after2 = try ctx.fetchCount(FetchDescriptor<RunProtocol>())
-        #expect(after1 == 24)
-        #expect(after2 == 24)
+        #expect(after1 == 30)
+        #expect(after2 == 30)
     }
 
     @Test func cloneProducesEditableDraftWithoutTouchingTemplate() throws {
