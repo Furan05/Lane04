@@ -18,6 +18,12 @@ enum TrainingZone: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Zone contenant un % VMA donné (bornée : ≤Z1 en bas, ≥Z5 en haut).
+    /// Renvoie `nil` si hors de toute zone (allure aberrante) → `[OUT OF RANGE]`.
+    static func zone(forPercent percent: Double) -> TrainingZone? {
+        allCases.first { $0.band.contains(percent) }
+    }
+
     /// % VMA représentatif (centre de zone) — cible pour les templates.
     var percentVMA: Double {
         switch self {

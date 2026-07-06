@@ -40,6 +40,14 @@ enum VMACalculator {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    /// % VMA correspondant à une allure (secondes/km) donnée — réciproque de
+    /// `paceSecondsPerKm`. Utilisé par le sélecteur d'allure (§12).
+    static func percent(paceSecondsPerKm pace: Double, vma: Double) -> Double {
+        guard pace > 0, vma > 0 else { return 0 }
+        let speed = 1000 / pace          // m/s
+        return speed * 3.6 / vma * 100   // km/h -> % VMA
+    }
+
     /// Plage de vitesse cible (`Measurement<UnitSpeed>`, m/s) autour d'un % VMA,
     /// directement exploitable par `SpeedRangeAlert` de WorkoutKit.
     ///

@@ -28,21 +28,30 @@ struct ProtocolsScreen: View {
     }
 
     var body: some View {
-        ScreenScaffold(title: "PROTOCOLS", status: status) {
-            VStack(spacing: Spacing.l) {
-                PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
+        NavigationStack {
+            ScreenScaffold(title: "PROTOCOLS", status: status) {
+                VStack(spacing: Spacing.l) {
+                    PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
 
-                if protocols.isEmpty {
-                    EmptyStateView(
-                        headline: "NO PROTOCOL COMPILED",
-                        metric: "0 PAYLOADS",
-                        note: "Compile un protocole depuis un template pour commencer."
-                    )
-                } else {
-                    ForEach(protocols) { proto in
-                        ProtocolCell(proto: proto, vma: vma)
+                    if protocols.isEmpty {
+                        EmptyStateView(
+                            headline: "NO PROTOCOL COMPILED",
+                            metric: "0 PAYLOADS",
+                            note: "Compile un protocole depuis un template pour commencer."
+                        )
+                    } else {
+                        ForEach(protocols) { proto in
+                            NavigationLink(value: proto) {
+                                ProtocolCell(proto: proto, vma: vma)
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
                     }
                 }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: RunProtocol.self) { proto in
+                ProtocolEditorView(proto: proto)
             }
         }
         .sheet(isPresented: $showingLibrary) {
