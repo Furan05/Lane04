@@ -16,6 +16,17 @@ enum Tab: String, CaseIterable, Identifiable {
     case logs = "LOGS"
     case console = "CONSOLE"
     var id: String { rawValue }
+
+    /// Label VoiceOver en français clair — la typo mono anglaise est le symbole
+    /// visuel, mais l'annonce reste lisible (la perte de la TabView native ne
+    /// doit rien coûter à l'accessibilité).
+    var voiceOverLabel: String {
+        switch self {
+        case .protocols: return "Protocoles"
+        case .logs:      return "Journal"
+        case .console:   return "Console"
+        }
+    }
 }
 
 // MARK: - Racine
@@ -42,6 +53,10 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Bascule d'onglet en Duration.micro : opacity only (transform interdit
+            // sur un plein écran ; Reduce Motion obtient déjà un simple fondu).
+            .id(router.tab)
+            .transition(.opacity)
 
             TabBar(selection: $router.tab)
         }
@@ -52,6 +67,11 @@ struct RootView: View {
         .task {
             Seeder.seedIfNeeded(modelContext)
             Seeder.ensureOperatorProfile(modelContext)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uitest-simulate-tx") {
+                injection.simulateTransmittingForUITest()
+            }
+            #endif
             await link.refresh()
         }
         .fullScreenCover(isPresented: Binding(get: { !hasOnboarded }, set: { _ in })) {
@@ -64,35 +84,96 @@ struct RootView: View {
     }
 }
 
-// MARK: - Tab bar (custom, typo mono conforme)
+// MARK: - Bottom bar (custom LANE 04 — « le mot est le symbole », §06/§09)
 
+/// Barre de navigation basse. Texte seul, aucune icône : PROTOCOLS / LOGS /
+/// CONSOLE en Font.label. Matériau Liquid Glass sur VOID, hairline supérieure
+/// comme seule séparation. États : ACTIVE (blanc + micro-barre indicatrice —
+/// clin d'œil QUAD, jamais EMBER), INACTIVE (steel), FAULT (CONSOLE en EMBER
+/// texte quand une faute liaison est active), DISABLED-TX (barre à 40 %, taps
+/// ignorés pendant une injection).
 private struct TabBar: View {
     @Binding var selection: Tab
+    @Environment(InjectionController.self) private var injection
+    @Environment(LinkController.self) private var link
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var isTX: Bool { injection.isTransmitting }
+
+    private var switchAnimation: Animation {
+        // Reduce Motion : fondu simple, zéro translation. Sinon courbe maîtresse.
+        reduceMotion ? .easeInOut(duration: Duration.reduceMotion)
+                     : .master(Duration.micro)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases) { tab in
-                let isActive = tab == selection
-                Button {
-                    withAnimation(.master(Duration.micro)) { selection = tab }
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.label)
-                        .tracking(1.5)
-                        // L'onglet actif reste en blanc : l'accent est réservé aux actions.
-                        .foregroundStyle(isActive ? Color.laneWhite : Color.steel)
-                        .frame(maxWidth: .infinity, minHeight: Touch.min)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                tabButton(tab)
             }
         }
-        .padding(.horizontal, Spacing.l)
-        .padding(.top, Spacing.s)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Surface.hairline).frame(height: 1)
+        .padding(.top, Spacing.m)
+        .padding(.bottom, Grid.safeBottom)          // dégage l'home indicator
+        .padding(.horizontal, Grid.margin)
+        .frame(maxWidth: .infinity)
+        .background {
+            // Liquid Glass (Surface.navBlur ≈ 20) posé sur VOID, débordant sous
+            // l'home indicator ; hairline supérieure = seule séparation.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Surface.hairline).frame(height: 1)
+                }
+                .ignoresSafeArea(edges: .bottom)
         }
+        // DISABLED — TX : la barre entière chute à 40 % et ignore les taps.
+        .opacity(isTX ? 0.4 : 1)
+        .allowsHitTesting(!isTX)
+        .animation(switchAnimation, value: isTX)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isTabBar)
+    }
+
+    @ViewBuilder
+    private func tabButton(_ tab: Tab) -> some View {
+        let isActive = tab == selection
+        // FAULT : le mot CONSOLE porte la teinte EMBER (signal en texte) quand une
+        // faute liaison est active — jamais un aplat, l'accent reste au hero.
+        let isFault = tab == .console && link.hasFault
+        let tint: Color = isFault ? .ember
+                        : (isActive ? .laneWhite : .steel)
+
+        Button {
+            guard tab != selection else { return }
+            Haptic.selection()
+            withAnimation(switchAnimation) { selection = tab }
+        } label: {
+            Text(tab.rawValue)
+                .font(.label)
+                .tracking(1.5)
+                .foregroundStyle(tint)
+                // Micro-barre indicatrice sous le mot : 2 pt, largeur du mot,
+                // toujours blanche (structure QUAD), même en faute — l'EMBER
+                // vit dans le mot, pas dans l'indicateur.
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.laneWhite)
+                        .frame(height: 2)
+                        .offset(y: 7)
+                        .opacity(isActive ? 1 : 0)
+                        .scaleEffect(x: reduceMotion || isActive ? 1 : 0.5,
+                                     anchor: .center)
+                }
+                .frame(maxWidth: .infinity, minHeight: Touch.min)
+                .contentShape(Rectangle())      // zone de tap généreuse ≥ 44 pt
+        }
+        .buttonStyle(.plain)
+        // Identifiant = le mot brut (tests + parité avec l'ancienne TabView) ;
+        // le label VoiceOver reste en français clair.
+        .accessibilityIdentifier(tab.rawValue)
+        .accessibilityLabel(tab.voiceOverLabel)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+        .accessibilityValue(isFault ? "Défaut système" : "")
     }
 }
 

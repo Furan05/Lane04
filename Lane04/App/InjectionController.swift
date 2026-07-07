@@ -30,6 +30,16 @@ final class InjectionController {
     private(set) var phase: Phase = .idle
     private(set) var activeID: PersistentIdentifier?
 
+    /// Une injection est en cours (états transitoires), quel que soit le protocole.
+    /// La bottom bar passe à 40 % et ignore les taps tant que c'est vrai
+    /// (cohérent avec l'écran qui chute à 40 % pendant ARM).
+    var isTransmitting: Bool {
+        switch phase {
+        case .arming, .transferring, .flashing: return true
+        default: return false
+        }
+    }
+
     /// Une injection est en cours (états transitoires) pour ce protocole ?
     func isInjecting(_ proto: RunProtocol) -> Bool {
         guard activeID == proto.persistentModelID else { return false }
@@ -53,6 +63,16 @@ final class InjectionController {
     }
 
     func acknowledgeFault() { reset() }
+
+    #if DEBUG
+    /// Seam de test UI (DEBUG uniquement) : fige la barre en état TX sans lancer
+    /// de vraie injection (le hero est éteint sans montre pairée en simulateur).
+    /// Permet de vérifier que la bottom bar passe à 40 % et ignore les taps.
+    func simulateTransmittingForUITest() {
+        activeID = nil
+        phase = .transferring(0.5)
+    }
+    #endif
 
     private func reset() {
         phase = .idle

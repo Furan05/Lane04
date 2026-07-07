@@ -31,6 +31,11 @@ final class LinkController {
 
     var isReady: Bool { status == .ready }
 
+    /// Une faute système de liaison est active (NO LINK / ACCESS DENIED) : la
+    /// bottom bar teinte alors le mot CONSOLE en EMBER (signal en texte, pas
+    /// d'aplat) pour pointer vers l'écran qui porte la faute.
+    var hasFault: Bool { status == .unpaired || status == .healthKitDenied }
+
     /// Statut système `[BRACKET]` pour l'en-tête selon la liaison.
     var bracket: String {
         switch status {
