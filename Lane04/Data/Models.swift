@@ -55,7 +55,7 @@ enum GoalKind: String, Codable {
 /// État système d'un protocole → statut `[BRACKET]`.
 enum ProtocolState: String, Codable {
     case draft = "DRAFT"
-    case ready = "PAYLOAD READY"
+    case ready = "TRAINING READY"
     case synced = "SYNCED"
     case fault = "SYNC FAULT"
 }

@@ -106,7 +106,7 @@ private struct OperatorContent: View {
     }
 
     /// Clone-ou-réutilise TEST_VMA (idempotent) et ouvre son éditeur par le chemin
-    /// nominal — le hero INJECT PAYLOAD y fait le reste. Aucun flux parallèle.
+    /// nominal — le hero INJECT TRAINING y fait le reste. Aucun flux parallèle.
     private func prepareAndOpenTest() {
         guard let test = ProtocolActions.prepareTestVMA(in: modelContext) else { return }
         router.openEditor(test)

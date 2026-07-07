@@ -109,7 +109,7 @@ enum Duration {
     static let standard: TimeInterval = 0.180  // cartes, sheets
     static let scene: TimeInterval = 0.320     // navigation
     static let reduceMotion: TimeInterval = 0.120
-    /// Chorégraphie INJECT PAYLOAD.
+    /// Chorégraphie INJECT TRAINING.
     static let ritual: TimeInterval = 2.400
     static let fast: TimeInterval = 0.900
 }

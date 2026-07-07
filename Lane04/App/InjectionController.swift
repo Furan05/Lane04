@@ -141,7 +141,7 @@ final class InjectionController {
             try? await Task.sleep(for: .seconds(0.080)) // obturateur du chronométreur
         }
 
-        // CONFIRM — PAYLOAD DELIVERED = la vérité.
+        // CONFIRM — TRAINING DELIVERED = la vérité.
         phase = .delivered
         Haptic.done()
         proto.state = .synced

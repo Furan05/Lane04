@@ -3,7 +3,7 @@
 //  Lane04UITests
 //
 //  Pont CALIBRATION → TEST_VMA : le raccourci de la voie MESURE (OPERATOR) doit
-//  ouvrir l'éditeur du test par le chemin nominal (hero INJECT PAYLOAD), et
+//  ouvrir l'éditeur du test par le chemin nominal (hero INJECT TRAINING), et
 //  laisser l'aplat unique de l'écran sur CALIBRATE (le recours est un contour).
 //
 

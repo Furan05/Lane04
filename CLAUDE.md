@@ -12,15 +12,15 @@ Issues du case study §01–09. Toute PR doit les respecter.
 1. **Un seul aplat d'accent par écran** = l'unique action possible. **Jamais EMBER + CRYO en aplat sur le même écran** — seule exception : l'écran de séance en cours (effort/récup superposés).
 2. **Règle des 10 %** : les accents ne couvrent jamais plus de 10 % de la surface. EMBER/CRYO sont des **signaux, jamais du décor**.
 3. **Sémantique thermique** : `EMBER #FF4D00` = effort, action primaire, allure dépassée, alerte. `CRYO #00E5FF` = récupération, allure conforme, sync OK, confirmation. L'utilisateur lit sa séance sans lire un mot.
-4. **Statut `[BRACKET]`** en haut à droite de **chaque** écran, sans exception (ex. `[PAYLOAD READY]`, `[SYNCED]`, `[NO LINK]`, `[SYNC FAULT]`).
-5. **Vocabulaire système** en mono, MAJUSCULES, anglais technique — réservé aux **commandes et statuts** : `COMPILE PROTOCOL`, `COMMIT`, `INJECT PAYLOAD`, `PAYLOAD DELIVERED`, `WARM-UP` / `COOL-DOWN`, `LOGS`, `CONSOLE`, `OPERATOR`, `SYNC FAULT — RETRY`. Le **français** reste la langue de lecture (descriptions, aide, onboarding). Pas d'emoji, pas de « bravo », pas de gamification.
+4. **Statut `[BRACKET]`** en haut à droite de **chaque** écran, sans exception (ex. `[TRAINING READY]`, `[SYNCED]`, `[NO LINK]`, `[SYNC FAULT]`).
+5. **Vocabulaire système** en mono, MAJUSCULES, anglais technique — réservé aux **commandes et statuts** : `COMPILE PROTOCOL`, `COMMIT`, `INJECT TRAINING`, `TRAINING DELIVERED`, `WARM-UP` / `COOL-DOWN`, `LOGS`, `CONSOLE`, `OPERATOR`, `SYNC FAULT — RETRY`. Le **français** reste la langue de lecture (descriptions, aide, onboarding). Pas d'emoji, pas de « bravo », pas de gamification. **`TRAINING` remplace le `PAYLOAD` du case study** (décision operator — « payload » pas assez explicite ; voir `docs/session-notes.md`).
 6. **Chiffres tabulaires** (`.monospacedDigit()`, chasse fixe) sur **toute** valeur métrique — chrono, allure, distance, répétition, FC — **sans exception**. Un chrono qui tremble est un instrument cassé.
 7. **Cibles tactiles 44 × 44 pt** minimum, sans exception.
 8. **Animations : `opacity` + `transform` uniquement.** Une seule courbe : `cubic-bezier(0.16, 1, 0.3, 1)` (`Animation.master`). Décélération brutale, **jamais de rebond**. **Jamais d'ombre portée diffuse** — la profondeur se construit par paliers de luminance (`VOID`→`CARBON-1`→`CARBON-2`→`GLASS`) + hairlines. **Respect de Reduce Motion** : fondu 120 ms, zéro translation.
-9. **Badges/statuts : radius 0**, jamais arrondis. Grammaire : pointillé = `[DRAFT]` (brouillon), contour = attente (`[PAYLOAD READY]`), aplat = confirmé (`[SYNCED]`), clignotement 1.2 s = faute (`[FAULT]`, exige une action).
+9. **Badges/statuts : radius 0**, jamais arrondis. Grammaire : pointillé = `[DRAFT]` (brouillon), contour = attente (`[TRAINING READY]`), aplat = confirmé (`[SYNCED]`), clignotement 1.2 s = faute (`[FAULT]`, exige une action).
 10. **Le mot porte l'état, jamais la couleur seule.** Toute faute nomme sa cause et propose exactement **une** action.
 11. **Extinction pendant l'effort** : une fois le payload injecté, aucune surface LANE 04 n'existe pendant la course — l'app native Exercice reprend la main.
-12. **Chorégraphie `INJECT PAYLOAD`** : `RITUAL` 2400 ms (injections 1–9) → bascule auto `FAST` 900 ms dès la 10ᵉ. Réglable dans `CONSOLE › TX MODE`. Reduce Motion force `FAST` en fondu, sans flash.
+12. **Chorégraphie `INJECT TRAINING`** : `RITUAL` 2400 ms (injections 1–9) → bascule auto `FAST` 900 ms dès la 10ᵉ. Réglable dans `CONSOLE › TX MODE`. Reduce Motion force `FAST` en fondu, sans flash.
 
 ## Docs de référence (extraites du case study)
 

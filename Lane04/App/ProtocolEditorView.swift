@@ -216,7 +216,7 @@ struct ProtocolEditorView: View {
             if case .delivered = phase {
                 deliveredBar
             } else {
-                PrimaryActionButton(title: "INJECT PAYLOAD") { startInjection() }
+                PrimaryActionButton(title: "INJECT TRAINING") { startInjection() }
             }
         case .arming, .transferring, .flashing:
             targetLine
@@ -245,7 +245,7 @@ struct ProtocolEditorView: View {
     }
 
     private var deliveredBar: some View {
-        Text("PAYLOAD DELIVERED")
+        Text("TRAINING DELIVERED")
             .font(.button).foregroundStyle(Color.void)
             .frame(maxWidth: .infinity, minHeight: Touch.min).padding(.vertical, Spacing.m)
             .background(Color.cryo, in: RoundedRectangle(cornerRadius: Radius.button, style: .continuous))

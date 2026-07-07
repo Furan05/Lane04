@@ -17,7 +17,7 @@ struct LogsScreen: View {
         ScreenScaffold(title: "LOGS", status: logs.isEmpty ? "IDLE" : "\(logs.count) LOGS") {
             if logs.isEmpty {
                 EmptyStateView(
-                    headline: "NO PAYLOAD LOGGED",
+                    headline: "NO TRAINING LOGGED",
                     metric: "0",
                     note: "Chaque injection réussie s'inscrit ici."
                 )

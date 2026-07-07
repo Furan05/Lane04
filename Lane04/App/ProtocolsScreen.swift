@@ -41,7 +41,7 @@ struct ProtocolsScreen: View {
                     if protocols.isEmpty {
                         EmptyStateView(
                             headline: "NO PROTOCOL COMPILED",
-                            metric: "0 PAYLOADS",
+                            metric: "0 TRAININGS",
                             note: "Compile un protocole depuis un template pour commencer."
                         )
                         Spacer()

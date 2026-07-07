@@ -98,6 +98,12 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - **Seam de test UI `-uitest-simulate-tx`** (DEBUG, `Lane04App` non — porté par `RootView.task` + `InjectionController.simulateTransmittingForUITest()`) : fige la barre en état TX sans injection réelle (le hero est éteint sans montre pairée en simulateur). Couvre `TabBarUITests.testBarDisabledDuringTransmission`. ⚠️ XCUITest `isHittable` **ne respecte pas** `allowsHitTesting(false)` → le test vérifie l'**absence de navigation** au tap, pas `isHittable`.
 - Tests : `Lane04UITests/TabBarUITests` (navigation 3 onglets, état sélectionné, raccourci OPERATOR intact, barre désactivée pendant TX). Raccourci OPERATOR toujours couvert par `CalibrationShortcutUITests`.
 
+### Vocabulaire : TRAINING remplace PAYLOAD (décision operator)
+- **Le case study nomme la séance compilée `PAYLOAD`** (métaphore compile → inject payload → run). L'operator a tranché : **« payload » pas assez explicite → `TRAINING` partout**, en gardant le registre système anglais MAJUSCULES (règle n°5).
+- **6 chaînes visibles** basculées : `INJECT TRAINING` (hero), `TRAINING DELIVERED`, `[TRAINING READY]` (`ProtocolState.ready` rawValue), `0 TRAININGS` (empty PROTOCOLS), `NO TRAINING LOGGED` (empty LOGS), `TRAINING LINK ESTABLISHED` (pairing). `CLAUDE.md` règles 4/5/9/12 mises à jour pour éviter un revert par une session future.
+- ⚠️ **`ProtocolState.ready` rawValue a changé** (`"PAYLOAD READY"` → `"TRAINING READY"`) : valeur **persistée** en SwiftData. Pas de migration (aucune donnée livrée, modèle dev) — une base sim antérieure peut porter l'ancienne valeur ; reset du simulateur si besoin.
+- **Non balayé** (référence case study extraite, pas du code applicatif) : `docs/screens.md`, `docs/copy.md`, `docs/design-tokens.md`, `docs/data-model.md` citent encore `PAYLOAD`. Lire « PAYLOAD » = « TRAINING » dans ces extraits, ou les harmoniser plus tard.
+
 ### Contrainte ferme
 - **JAMAIS de cible watchOS** (principe fondateur). Seule exception future possible (V3, sur demande explicite) : complication QUAD. Voir mémoire projet `[[lane04-design-decisions]]`.
 

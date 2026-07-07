@@ -36,7 +36,7 @@ struct PairingView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if link.isReady {
-                    Text("PAYLOAD LINK ESTABLISHED")
+                    Text("TRAINING LINK ESTABLISHED")
                         .font(.label).tracking(1.5).foregroundStyle(Color.cryo)
                 }
 

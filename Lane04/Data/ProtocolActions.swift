@@ -30,7 +30,7 @@ enum ProtocolActions {
     }
 
     /// Prépare le protocole de test VMA pour injection via le chemin nominal
-    /// (éditeur → hero INJECT PAYLOAD). **Idempotent** : réutilise un `TEST_VMA`
+    /// (éditeur → hero INJECT TRAINING). **Idempotent** : réutilise un `TEST_VMA`
     /// déjà cloné ([DRAFT] ou [SYNCED], pas encore couru) s'il en existe un —
     /// jamais d'accumulation de tests fantômes. Sinon clone le template.
     /// Réutilise `Seeder.clone`, aucune logique d'injection nouvelle.
