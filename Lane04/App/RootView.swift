@@ -84,14 +84,15 @@ struct RootView: View {
     }
 }
 
-// MARK: - Bottom bar (custom LANE 04 — « le mot est le symbole », §06/§09)
+// MARK: - Bottom bar (custom LANE 04 — pictogrammes seuls, §06/§09)
 
-/// Barre de navigation basse. Texte seul, aucune icône : PROTOCOLS / LOGS /
-/// CONSOLE en Font.label. Matériau Liquid Glass sur VOID, hairline supérieure
-/// comme seule séparation. États : ACTIVE (blanc + micro-barre indicatrice —
-/// clin d'œil QUAD, jamais EMBER), INACTIVE (steel), FAULT (CONSOLE en EMBER
-/// texte quand une faute liaison est active), DISABLED-TX (barre à 40 %, taps
-/// ignorés pendant une injection).
+/// Barre de navigation basse. **Pictogrammes seuls, aucun texte** (revirement —
+/// voir docs/session-notes.md : « le mot est le symbole » reste la règle des
+/// STATUTS, pas de la nav). Glyphes custom `NavGlyphView` en contour. Matériau
+/// Liquid Glass sur VOID, hairline supérieure comme seule séparation. États :
+/// ACTIVE (trait blanc + micro-barre indicatrice — clin d'œil QUAD, jamais
+/// EMBER), INACTIVE (steel), FAULT (glyphe CONSOLE en trait EMBER quand une
+/// faute liaison est active), DISABLED-TX (barre à 40 %, taps ignorés).
 private struct TabBar: View {
     @Binding var selection: Tab
     @Environment(InjectionController.self) private var injection
@@ -112,13 +113,20 @@ private struct TabBar: View {
                 tabButton(tab)
             }
         }
-        .padding(.top, Spacing.m)
-        .padding(.bottom, Grid.safeBottom)          // dégage l'home indicator
+        // Barre minimale : la cible tactile 44 pt tient le rythme. Toute la barre
+        // déborde sous l'home indicator (contenu compris) → on ne réserve PAS la
+        // safe area sous les glyphes ; un dégagement fixe court les pose juste
+        // au-dessus de la pilule, sans espace mort.
+        .padding(.top, Spacing.s)
+        .padding(.bottom, Spacing.m)
         .padding(.horizontal, Grid.margin)
         .frame(maxWidth: .infinity)
         .background {
-            // Liquid Glass (Surface.navBlur ≈ 20) posé sur VOID, débordant sous
-            // l'home indicator ; hairline supérieure = seule séparation.
+            // Liquid Glass (Surface.navBlur ≈ 20) posé sur VOID ; hairline
+            // supérieure = seule séparation. Le `.ignoresSafeArea` vit ICI, sur le
+            // remplissage : un Rectangle s'étire pour couvrir la zone sous l'home
+            // indicator. Le poser sur la barre composite ne réétirait PAS ce fond
+            // (background calé sur le contenu) → bande VOID noire résiduelle.
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .overlay(alignment: .top) {
@@ -148,13 +156,11 @@ private struct TabBar: View {
             Haptic.selection()
             withAnimation(switchAnimation) { selection = tab }
         } label: {
-            Text(tab.rawValue)
-                .font(.label)
-                .tracking(1.5)
+            NavGlyphView(tab: tab)
                 .foregroundStyle(tint)
-                // Micro-barre indicatrice sous le mot : 2 pt, largeur du mot,
-                // toujours blanche (structure QUAD), même en faute — l'EMBER
-                // vit dans le mot, pas dans l'indicateur.
+                // Micro-barre indicatrice sous le glyphe : 2 pt, largeur du
+                // glyphe, toujours blanche (structure QUAD), même en faute —
+                // l'EMBER vit dans le trait du glyphe, pas dans l'indicateur.
                 .overlay(alignment: .bottom) {
                     Rectangle()
                         .fill(Color.laneWhite)

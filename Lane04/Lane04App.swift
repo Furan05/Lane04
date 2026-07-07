@@ -27,7 +27,15 @@ struct Lane04App: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uitest-glyph-preview") {
+                NavGlyphPreview()   // galerie de validation des glyphes (capture)
+            } else {
+                RootView()
+            }
+            #else
             RootView()
+            #endif
         }
         .modelContainer(for: [
             RunProtocol.self,
