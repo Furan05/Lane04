@@ -36,7 +36,6 @@ struct ProtocolsScreen: View {
                 Color.void.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: Spacing.l) {
                     header
-                    PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
 
                     if protocols.isEmpty {
                         EmptyStateView(
@@ -48,6 +47,10 @@ struct ProtocolsScreen: View {
                     } else {
                         protocolList
                     }
+
+                    // CTA ancrée sous les trainings : le geste de compilation est
+                    // la conclusion de la lecture de la liste, pas son préambule.
+                    PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
                 }
                 .padding(.horizontal, Grid.margin)
                 .padding(.top, Grid.safeTop)
