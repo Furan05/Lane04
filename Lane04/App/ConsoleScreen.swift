@@ -26,6 +26,7 @@ struct ConsoleScreen: View {
                         .buttonStyle(PressableStyle())
 
                     settingsCard
+                    helpCard
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -99,5 +100,33 @@ struct ConsoleScreen: View {
 
     private var hairline: some View {
         Rectangle().fill(Surface.hairline).frame(height: 1)
+    }
+
+    // MARK: Aide — à quoi sert chaque réglage (français, langue de lecture §02)
+
+    private var helpCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            Text("AIDE").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            helpRow("TX MODE",
+                    "La mise en scène de l'envoi vers la montre. RITUAL = l'animation complète ; FAST = envoi rapide. Passe tout seul en FAST après 10 envois réussis.")
+            helpRow("UNITS",
+                    "L'unité d'affichage des allures : MIN/KM (minutes par kilomètre) ou KM/H (kilomètres par heure).")
+            helpRow("HAPTICS",
+                    "Les vibrations de retour, à chaque appui et pendant l'injection. ON pour les sentir, OFF pour le silence.")
+            helpRow("TARGET",
+                    "Le modèle d'Apple Watch visé pour l'envoi : ULTRA 2, SERIES ou SE.")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.l)
+        .glassCard()
+    }
+
+    private func helpRow(_ key: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(key).font(.label).tracking(1.5).foregroundStyle(Color.laneWhite)
+            Text(text).font(.bodyBrand).foregroundStyle(Color.steel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
