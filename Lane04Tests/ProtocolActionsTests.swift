@@ -151,4 +151,102 @@ struct ProtocolActionsTests {
             predicate: #Predicate { !$0.isTemplate && $0.isTest }))
         #expect(userTests.count == 1)
     }
+
+    // MARK: - Builder manuel (création vierge « from scratch »)
+
+    private func orderedBlocks(_ p: RunProtocol) -> [ProtocolBlock] {
+        p.blocks.sorted { $0.order < $1.order }
+    }
+
+    @Test func createBlank_producesEditableDraftScaffold() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+
+        #expect(proto.isTemplate == false)
+        #expect(proto.isTest == false)
+        #expect(proto.state == .draft)
+        // Échafaudage : WARM-UP + 1 bloc d'effort + COOL-DOWN, ordres contigus 0..2.
+        let blocks = orderedBlocks(proto)
+        #expect(blocks.count == 3)
+        #expect(blocks.map(\.order) == [0, 1, 2])
+        #expect(blocks.first?.steps.first?.role == .warmup)
+        #expect(blocks.last?.steps.first?.role == .cooldown)
+        #expect(blocks[1].steps.first?.role == .work)
+        #expect(blocks[1].steps.first?.targetsPace == true)
+    }
+
+    @Test func addWorkBlock_insertsBeforeCooldown_andRenumbers() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+
+        let added = ProtocolActions.addWorkBlock(to: proto, in: ctx)
+        let blocks = orderedBlocks(proto)
+        #expect(blocks.count == 4)
+        #expect(blocks.map(\.order) == [0, 1, 2, 3])           // toujours contigus
+        // Le nouveau bloc est juste avant le COOL-DOWN (dernier).
+        #expect(blocks[2].id == added.id)
+        #expect(ProtocolActions.isCooldownWrapper(blocks[3]))
+    }
+
+    @Test func deleteBlock_removesAndRenumbers() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+        let work = orderedBlocks(proto)[1]
+
+        ProtocolActions.deleteBlock(work, from: proto, in: ctx)
+        let blocks = orderedBlocks(proto)
+        #expect(blocks.count == 2)
+        #expect(blocks.map(\.order) == [0, 1])
+        #expect(blocks.allSatisfy { $0.id != work.id })
+    }
+
+    @Test func moveBlock_swapsOrderWithNeighbor() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+        _ = ProtocolActions.addWorkBlock(to: proto, in: ctx)   // 2 blocs d'effort
+        let before = orderedBlocks(proto)
+        let firstWork = before[1], secondWork = before[2]
+
+        ProtocolActions.moveBlock(secondWork, by: -1, in: proto, context: ctx)
+        let after = orderedBlocks(proto)
+        #expect(after[1].id == secondWork.id)
+        #expect(after[2].id == firstWork.id)
+        #expect(after.map(\.order) == [0, 1, 2, 3])
+    }
+
+    @Test func moveBlock_atEdgeIsNoOp() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+        let warmup = orderedBlocks(proto)[0]
+        ProtocolActions.moveBlock(warmup, by: -1, in: proto, context: ctx) // déjà en tête
+        #expect(orderedBlocks(proto).first?.id == warmup.id)
+    }
+
+    @Test func addStep_appendsWithContiguousOrder() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+        let work = orderedBlocks(proto)[1]
+
+        let rec = ProtocolActions.addStep(to: work, role: .recovery, in: ctx)
+        #expect(work.steps.count == 2)
+        #expect(rec.role == .recovery)
+        #expect(rec.targetsPace == false)
+        #expect(work.steps.sorted { $0.order < $1.order }.map(\.order) == [0, 1])
+    }
+
+    @Test func deleteStep_keepsAtLeastOne() throws {
+        let ctx = try makeContext()
+        let proto = ProtocolActions.createBlank(in: ctx)
+        let work = orderedBlocks(proto)[1]
+        _ = ProtocolActions.addStep(to: work, role: .recovery, in: ctx)
+
+        let first = work.steps.sorted { $0.order < $1.order }[0]
+        ProtocolActions.deleteStep(first, from: work, in: ctx)
+        #expect(work.steps.count == 1)
+
+        // Le dernier pas ne se supprime pas (un bloc vide n'a pas de sens).
+        let last = work.steps[0]
+        ProtocolActions.deleteStep(last, from: work, in: ctx)
+        #expect(work.steps.count == 1)
+    }
 }

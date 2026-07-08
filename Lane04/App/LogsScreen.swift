@@ -14,7 +14,7 @@ struct LogsScreen: View {
     @Query(sort: \RunLog.date, order: .reverse) private var logs: [RunLog]
 
     var body: some View {
-        ScreenScaffold(title: "LOGS", status: logs.isEmpty ? "IDLE" : "\(logs.count) LOGS") {
+        ScreenScaffold(title: "LOGS", status: logs.isEmpty ? "NO DATA" : "\(logs.count) LOGS") {
             if logs.isEmpty {
                 EmptyStateView(
                     headline: "NO TRAINING LOGGED",

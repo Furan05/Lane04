@@ -24,6 +24,16 @@ enum Discipline: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     /// Rendu du tag, crochets inclus (les crochets font partie du glyphe, §06).
     var tag: String { "[\(rawValue)]" }
+    /// Descripteur français (langue de lecture, §02) — sous-titre du dossier de style.
+    var subtitle: String {
+        switch self {
+        case .vma:     return "Vitesse maximale aérobie"
+        case .seuil:   return "Allure seuil"
+        case .tempo:   return "Endurance active"
+        case .fartlek: return "Jeu d'allures"
+        case .recup:   return "Récupération"
+        }
+    }
     /// Contour thermique sur la rampe curatée (§06) : VMA=Z5 (EMBER) → RECUP=Z1 (CRYO).
     var tint: Color {
         switch self {

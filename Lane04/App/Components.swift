@@ -76,6 +76,9 @@ struct PrimaryActionButton: View {
 /// l'accent de l'écran. Réservé aux voies secondaires (« plus tard », raccourcis).
 struct OutlineActionButton: View {
     let title: String
+    /// Contour en pointillé (grammaire `[DRAFT]`, §09) — pour une action qui
+    /// fabrique un brouillon vierge (ex. NEW FROM SCRATCH). Trait plein sinon.
+    var dashed: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -89,8 +92,12 @@ struct OutlineActionButton: View {
                 .frame(maxWidth: .infinity, minHeight: Touch.min)
                 .padding(.vertical, Spacing.s)
                 .overlay {
+                    // Pointillé = signal [DRAFT] lisible (steel, tirets marqués) ;
+                    // trait plein = hairline discret (contour secondaire neutre).
                     RoundedRectangle(cornerRadius: Radius.button)
-                        .strokeBorder(Surface.hairline, lineWidth: 1)
+                        .strokeBorder(dashed ? Color.steel : Surface.hairline,
+                                      style: StrokeStyle(lineWidth: dashed ? 1.5 : 1,
+                                                         dash: dashed ? [6, 5] : []))
                 }
         }
         .buttonStyle(PressableStyle())
@@ -187,6 +194,19 @@ enum Format {
         let t = Int(seconds.rounded())
         let h = t / 3600, m = (t % 3600) / 60, s = t % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+    }
+
+    /// Objectif de pas en durée : « 45 S » sous la minute, « 12 MIN » si multiple
+    /// entier, sinon « 1:30 MIN ». Compact, majuscules, pour le builder.
+    static func goalTime(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds) S" }
+        let m = seconds / 60, s = seconds % 60
+        return s == 0 ? "\(m) MIN" : String(format: "%d:%02d MIN", m, s)
+    }
+
+    /// Objectif de pas en distance : « 400 M » sous le km, « 1.5 KM » au-delà.
+    static func goalDistance(_ meters: Int) -> String {
+        meters < 1000 ? "\(meters) M" : String(format: "%.1f KM", Double(meters) / 1000)
     }
 
     private static let dateTimeFormatter: DateFormatter = {

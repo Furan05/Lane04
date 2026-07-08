@@ -24,7 +24,7 @@ struct ProtocolsScreen: View {
     @State private var pendingDelete: RunProtocol?   // confirmation pour un [SYNCED]
 
     private var status: String {
-        if protocols.isEmpty { return "IDLE" }
+        if protocols.isEmpty { return "NO TRAINING" }   // repos explicite (« le zéro est une donnée »)
         if protocols.contains(where: { $0.state == .synced }) { return "SYNCED" }
         return "\(protocols.count) DRAFT"
     }
@@ -50,7 +50,13 @@ struct ProtocolsScreen: View {
 
                     // CTA ancrée sous les trainings : le geste de compilation est
                     // la conclusion de la lecture de la liste, pas son préambule.
+                    // Aplat EMBER unique (règle n°1) ; la création vierge est un
+                    // recours EN CONTOUR (ne dépense pas l'accent).
                     PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
+                    OutlineActionButton(title: "NEW FROM SCRATCH", dashed: true) {
+                        let draft = ProtocolActions.createBlank(in: modelContext)
+                        router.openEditor(draft)
+                    }
                 }
                 .padding(.horizontal, Grid.margin)
                 .padding(.top, Grid.safeTop)
@@ -66,6 +72,7 @@ struct ProtocolsScreen: View {
                 let draft = Seeder.clone(template)
                 modelContext.insert(draft)
                 try? modelContext.save()
+                showingLibrary = false   // ferme la sheet (y compris depuis un dossier)
             }
         }
         .alert("DELETE PROTOCOL", isPresented: Binding(
@@ -182,44 +189,126 @@ struct TemplateLibrarySheet: View {
     @Query(filter: #Predicate<RunProtocol> { $0.isTemplate }, sort: \RunProtocol.name)
     private var templates: [RunProtocol]
 
+    // Dossiers = filières peuplées (dans l'ordre thermique EMBER→CRYO de l'enum).
+    private var populatedStyles: [Discipline] {
+        Discipline.allCases.filter { d in templates.contains { $0.discipline == d } }
+    }
+    private func group(_ d: Discipline) -> [RunProtocol] {
+        templates.filter { $0.discipline == d }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.void.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: Spacing.l) {
+                    HStack {
+                        Text("COMPILE FROM TEMPLATE")
+                            .font(.titleBrand)
+                            .foregroundStyle(Color.laneWhite)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.headline)
+                                .foregroundStyle(Color.steel)
+                                .frame(minWidth: Touch.min, minHeight: Touch.min)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Fermer")
+                    }
+                    .padding(.horizontal, Grid.margin)
+                    .padding(.top, Spacing.xl)
+
+                    // Niveau 1 : les dossiers de style. On choisit une filière avant
+                    // de voir ses templates (au lieu d'une liste à plat).
+                    ScrollView {
+                        VStack(spacing: Spacing.m) {
+                            ForEach(populatedStyles) { d in
+                                NavigationLink(value: d) {
+                                    StyleFolderCard(discipline: d, count: group(d).count)
+                                }
+                                .buttonStyle(PressableStyle())
+                                .accessibilityLabel("Style \(d.rawValue), \(group(d).count) protocoles")
+                            }
+                        }
+                        .padding(.horizontal, Grid.margin)
+                        .padding(.bottom, Grid.safeBottom)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                }
+            }
+            // Niveau 2 : les templates du style choisi.
+            .navigationDestination(for: Discipline.self) { d in
+                TemplateFolderView(discipline: d, templates: group(d), vma: vma, onPick: onPick)
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .presentationBackground(Color.void)
+        .presentationCornerRadius(Radius.sheet)
+    }
+}
+
+// MARK: - Dossier de style (niveau 1)
+
+/// Carte-dossier d'une filière : tag thermique + descripteur FR + compte. Le tag
+/// (contour teinté) porte l'identité ; aucun aplat (l'accent reste au hero PROTOCOLS).
+private struct StyleFolderCard: View {
+    let discipline: Discipline
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                TagBadge(discipline: discipline)
+                Text(discipline.subtitle).font(.bodyBrand).foregroundStyle(Color.steel)
+            }
+            Spacer()
+            Text("\(count)").font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+            Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Color.steel)
+        }
+        .frame(maxWidth: .infinity, minHeight: Touch.min, alignment: .leading)
+        .padding(Spacing.l)
+        .glassCard()
+    }
+}
+
+// MARK: - Contenu d'un dossier de style (niveau 2)
+
+private struct TemplateFolderView: View {
+    let discipline: Discipline
+    let templates: [RunProtocol]
+    let vma: Double
+    let onPick: (RunProtocol) -> Void
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ZStack {
             Color.void.ignoresSafeArea()
             VStack(alignment: .leading, spacing: Spacing.l) {
-                HStack {
-                    Text("COMPILE FROM TEMPLATE")
-                        .font(.titleBrand)
-                        .foregroundStyle(Color.laneWhite)
-                    Spacer()
+                HStack(spacing: Spacing.m) {
                     Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline)
-                            .foregroundStyle(Color.steel)
-                            .frame(minWidth: Touch.min, minHeight: Touch.min)
+                        Image(systemName: "chevron.left")
+                            .font(.title3).foregroundStyle(Color.steel)
+                            .frame(minWidth: Touch.min, minHeight: Touch.min, alignment: .leading)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Retour aux styles")
+                    TagBadge(discipline: discipline)
+                    Text(discipline.subtitle).font(.bodyBrand).foregroundStyle(Color.steel)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Spacer()
                 }
                 .padding(.horizontal, Grid.margin)
                 .padding(.top, Spacing.xl)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Spacing.xl) {
-                        ForEach(Discipline.allCases) { discipline in
-                            let group = templates.filter { $0.discipline == discipline }
-                            if !group.isEmpty {
-                                VStack(alignment: .leading, spacing: Spacing.s) {
-                                    TagBadge(discipline: discipline)
-                                    ForEach(group) { template in
-                                        Button {
-                                            onPick(template)
-                                            dismiss()
-                                        } label: {
-                                            TemplateRow(template: template, vma: vma)
-                                        }
-                                        .buttonStyle(PressableStyle())
-                                    }
-                                }
+                    VStack(spacing: Spacing.s) {
+                        ForEach(templates) { template in
+                            Button { onPick(template) } label: {
+                                TemplateRow(template: template, vma: vma)
                             }
+                            .buttonStyle(PressableStyle())
                         }
                     }
                     .padding(.horizontal, Grid.margin)
@@ -228,8 +317,7 @@ struct TemplateLibrarySheet: View {
                 .scrollBounceBehavior(.basedOnSize)
             }
         }
-        .presentationBackground(Color.void)
-        .presentationCornerRadius(Radius.sheet)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

@@ -23,12 +23,17 @@ struct ProtocolEditorView: View {
     @Query private var profiles: [OperatorProfile]
     private var vma: Double { profiles.first?.vma ?? 16.0 }
 
-    @State private var editingStep: ProtocolStep?
+    @State private var editingStep: ProtocolStep?   // sheet d'allure (%VMA)
+    @State private var editingGoal: ProtocolStep?   // sheet d'objectif (durée/distance)
     @State private var showingPairing = false
 
     private var orderedBlocks: [ProtocolBlock] {
         proto.blocks.sorted { $0.order < $1.order }
     }
+
+    /// Le protocole est en cours de construction/édition → affordances du builder
+    /// (rename, tag, add/del/reorder blocs, add/del pas, objectif éditable).
+    private var isDraft: Bool { proto.state == .draft }
 
     var body: some View {
         ZStack {
@@ -40,8 +45,17 @@ struct ProtocolEditorView: View {
                     ForEach(orderedBlocks) { block in
                         blockCard(block)
                     }
-                    // Sans liaison : cellules à 45 %, hero éteint (écran 09).
-                    .opacity(link.isReady ? 1 : 0.45)
+                    // Sans liaison : cellules à 45 %, hero éteint (écran 09). MAIS
+                    // un [DRAFT] se construit hors ligne → jamais dimmé pendant l'édition
+                    // (la faute de liaison est portée par le hero, pas par le contenu).
+                    .opacity(link.isReady || isDraft ? 1 : 0.45)
+                    if isDraft {
+                        OutlineActionButton(title: "+ AJOUTER UN BLOC") {
+                            withAnimation(.master(Duration.standard)) {
+                                _ = ProtocolActions.addWorkBlock(to: proto, in: modelContext)
+                            }
+                        }
+                    }
                     heroInject
                 }
             }
@@ -53,6 +67,9 @@ struct ProtocolEditorView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editingStep) { step in
             PaceSheet(step: step, vma: vma)
+        }
+        .sheet(item: $editingGoal) { step in
+            StepGoalSheet(step: step)
         }
         .sheet(isPresented: $showingPairing) {
             NavigationStack { PairingView() }
@@ -68,8 +85,8 @@ struct ProtocolEditorView: View {
     private var consoleHeader: some View {
         let totals = WorkoutBuilder.totals(for: proto, vma: vma)
         return VStack(alignment: .leading, spacing: Spacing.m) {
-            TagBadge(discipline: proto.discipline)
-            Text(proto.name).font(.titleBrand).foregroundStyle(Color.laneWhite)
+            tagControl
+            nameControl
             HStack(spacing: 0) {
                 summaryTile("DISTANCE", Format.distanceKM(totals.distance))
                 summaryTile("DURÉE", Format.duration(totals.duration))
@@ -78,6 +95,43 @@ struct ProtocolEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
+    }
+
+    // Tag [BRACKET] — éditable en [DRAFT] via un menu des 5 filières (nomenclature
+    // stricte : jamais de 6e catégorie). Figé sinon.
+    @ViewBuilder
+    private var tagControl: some View {
+        if isDraft {
+            Menu {
+                ForEach(Discipline.allCases) { d in
+                    Button { proto.discipline = d } label: { Text(d.tag) }
+                }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    TagBadge(discipline: proto.discipline)
+                    Image(systemName: "chevron.down").font(.caption2).foregroundStyle(Color.steel)
+                }
+                .frame(minHeight: Touch.min)
+            }
+            .accessibilityLabel("Changer la filière")
+        } else {
+            TagBadge(discipline: proto.discipline)
+        }
+    }
+
+    // Nom — éditable en [DRAFT] (champ mono expandé), figé sinon.
+    @ViewBuilder
+    private var nameControl: some View {
+        if isDraft {
+            TextField("NOM DU PROTOCOLE", text: $proto.name)
+                .font(.titleBrand).foregroundStyle(Color.laneWhite)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .accessibilityLabel("Nom du protocole")
+        } else {
+            Text(proto.name).font(.titleBrand).foregroundStyle(Color.laneWhite)
+        }
     }
 
     private func summaryTile(_ label: String, _ value: String) -> some View {
@@ -92,23 +146,84 @@ struct ProtocolEditorView: View {
 
     @ViewBuilder
     private func blockCard(_ block: ProtocolBlock) -> some View {
-        let isWrapper = block.iterations == 1 && block.steps.count == 1
-            && (block.steps.first?.role == .warmup || block.steps.first?.role == .cooldown)
+        let isWrapper = ProtocolActions.isWarmupWrapper(block) || ProtocolActions.isCooldownWrapper(block)
         VStack(alignment: .leading, spacing: Spacing.m) {
-            HStack {
+            HStack(spacing: Spacing.s) {
                 Text(block.title).font(.label).tracking(1.5).foregroundStyle(Color.steel)
                 Spacer()
+                if isDraft && !isWrapper {
+                    blockMenu(block)
+                }
                 if !isWrapper {
                     repsStepper(block)
                 }
             }
             ForEach(block.steps.sorted { $0.order < $1.order }) { step in
-                stepRow(step)
+                stepRow(step, in: block)
+            }
+            // Ajout de pas — réservé aux blocs d'effort d'un [DRAFT].
+            if isDraft && !isWrapper {
+                addStepRow(block)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
+    }
+
+    // Menu de bloc (⋯) : réordonner / supprimer. Réservé aux blocs d'effort d'un [DRAFT].
+    private func blockMenu(_ block: ProtocolBlock) -> some View {
+        Menu {
+            Button { moveBlock(block, by: -1) } label: { Label("MONTER", systemImage: "arrow.up") }
+            Button { moveBlock(block, by: 1) } label: { Label("DESCENDRE", systemImage: "arrow.down") }
+            Button(role: .destructive) {
+                Haptic.tick()
+                withAnimation(.master(Duration.standard)) {
+                    ProtocolActions.deleteBlock(block, from: proto, in: modelContext)
+                }
+            } label: { Label("SUPPRIMER LE BLOC", systemImage: "trash") }
+        } label: {
+            Image(systemName: "ellipsis").font(.subheadline).foregroundStyle(Color.steel)
+                .frame(width: Touch.min, height: Touch.min)
+        }
+        .accessibilityLabel("Options du bloc")
+    }
+
+    private func moveBlock(_ block: ProtocolBlock, by delta: Int) {
+        Haptic.selection()
+        withAnimation(.master(Duration.standard)) {
+            ProtocolActions.moveBlock(block, by: delta, in: proto, context: modelContext)
+        }
+    }
+
+    // Deux recours de structure : + EFFORT (EMBER texte) / + RÉCUP (CRYO texte).
+    // Signaux thermiques en TEXTE (contour) — jamais un aplat, l'accent reste au hero.
+    private func addStepRow(_ block: ProtocolBlock) -> some View {
+        HStack(spacing: Spacing.s) {
+            addStepButton("+ EFFORT", .ember, "Ajouter un pas d'effort") {
+                _ = ProtocolActions.addStep(to: block, role: .work, in: modelContext)
+            }
+            addStepButton("+ RÉCUP", .cryo, "Ajouter un pas de récupération") {
+                _ = ProtocolActions.addStep(to: block, role: .recovery, in: modelContext)
+            }
+        }
+    }
+
+    private func addStepButton(_ title: String, _ tint: Color, _ a11y: String,
+                               _ action: @escaping () -> Void) -> some View {
+        Button {
+            Haptic.selection()
+            withAnimation(.master(Duration.micro)) { action() }
+        } label: {
+            Text(title)
+                .font(.label).tracking(1.5).foregroundStyle(tint)
+                .frame(maxWidth: .infinity, minHeight: Touch.min)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.control).strokeBorder(Surface.hairline, lineWidth: 1)
+                }
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(a11y)
     }
 
     private func repsStepper(_ block: ProtocolBlock) -> some View {
@@ -136,26 +251,26 @@ struct ProtocolEditorView: View {
     // MARK: Ligne de pas (dualité effort/récup)
 
     @ViewBuilder
-    private func stepRow(_ step: ProtocolStep) -> some View {
+    private func stepRow(_ step: ProtocolStep, in block: ProtocolBlock) -> some View {
         let isEffort = step.role.isEffort
         HStack(spacing: Spacing.m) {
             IntervalRail(effort: isEffort)
-            Text(goalLabel(step))
-                .font(.data).foregroundStyle(isEffort ? Color.laneWhite : Color.steel).metricDigits()
+            goalControl(step, isEffort: isEffort)
             Spacer()
-            if isEffort {
-                Button { editingStep = step } label: {
-                    HStack(spacing: Spacing.xs) {
-                        Text("\(VMACalculator.paceString(vma: vma, percent: step.percentVMA)) /KM")
-                            .font(.data).foregroundStyle(Color.ember).metricDigits()
-                        Image(systemName: "slider.horizontal.3").font(.footnote).foregroundStyle(Color.ember)
+            paceControl(step, isEffort: isEffort)
+            // Supprimer le pas — [DRAFT] uniquement, et jamais le dernier pas d'un bloc.
+            if isDraft && block.steps.count > 1 {
+                Button {
+                    Haptic.tick()
+                    withAnimation(.master(Duration.micro)) {
+                        ProtocolActions.deleteStep(step, from: block, in: modelContext)
                     }
-                    .frame(minHeight: Touch.min)
+                } label: {
+                    Image(systemName: "xmark").font(.caption).foregroundStyle(Color.steel)
+                        .frame(width: Touch.min, height: Touch.min)
                 }
                 .buttonStyle(.plain)
-            } else {
-                Text("\(VMACalculator.paceString(vma: vma, percent: step.percentVMA)) /KM")
-                    .font(.data).foregroundStyle(Color.steel).metricDigits()
+                .accessibilityLabel("Supprimer le pas")
             }
         }
         .frame(minHeight: Touch.min)
@@ -163,6 +278,46 @@ struct ProtocolEditorView: View {
         .padding(.horizontal, Spacing.s)
         .background(isEffort ? Color.ember.opacity(0.06) : Color.clear,
                     in: RoundedRectangle(cornerRadius: Radius.control))
+    }
+
+    // Objectif (durée/distance) — éditable en [DRAFT] (sheet), figé sinon.
+    @ViewBuilder
+    private func goalControl(_ step: ProtocolStep, isEffort: Bool) -> some View {
+        if isDraft {
+            Button { editingGoal = step } label: {
+                HStack(spacing: Spacing.xs) {
+                    Text(goalLabel(step))
+                        .font(.data).foregroundStyle(isEffort ? Color.laneWhite : Color.steel).metricDigits()
+                    Image(systemName: "pencil").font(.caption2).foregroundStyle(Color.steel)
+                }
+                .frame(minHeight: Touch.min)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Modifier l'objectif du pas")
+        } else {
+            Text(goalLabel(step))
+                .font(.data).foregroundStyle(isEffort ? Color.laneWhite : Color.steel).metricDigits()
+        }
+    }
+
+    // Allure (%VMA) — éditable pour l'effort (sheet §12), lecture seule pour la récup.
+    @ViewBuilder
+    private func paceControl(_ step: ProtocolStep, isEffort: Bool) -> some View {
+        if isEffort {
+            Button { editingStep = step } label: {
+                HStack(spacing: Spacing.xs) {
+                    Text("\(VMACalculator.paceString(vma: vma, percent: step.percentVMA)) /KM")
+                        .font(.data).foregroundStyle(Color.ember).metricDigits()
+                    Image(systemName: "slider.horizontal.3").font(.footnote).foregroundStyle(Color.ember)
+                }
+                .frame(minHeight: Touch.min)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Modifier l'allure de l'effort")
+        } else {
+            Text("\(VMACalculator.paceString(vma: vma, percent: step.percentVMA)) /KM")
+                .font(.data).foregroundStyle(Color.steel).metricDigits()
+        }
     }
 
     private func goalLabel(_ step: ProtocolStep) -> String {
