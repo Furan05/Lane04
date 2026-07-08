@@ -113,27 +113,27 @@ private struct TabBar: View {
                 tabButton(tab)
             }
         }
-        // Barre minimale : la cible tactile 44 pt tient le rythme. Toute la barre
-        // déborde sous l'home indicator (contenu compris) → on ne réserve PAS la
-        // safe area sous les glyphes ; un dégagement fixe court les pose juste
-        // au-dessus de la pilule, sans espace mort.
-        .padding(.top, Spacing.s)
-        .padding(.bottom, Spacing.m)
-        .padding(.horizontal, Grid.margin)
-        .frame(maxWidth: .infinity)
+        // Barre FLOTTANTE (style Instagram récent) : pilule Liquid Glass détachée
+        // des bords, posée AU-DESSUS de l'home indicator avec un écart. Cible
+        // tactile 44 pt conservée.
+        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Spacing.l)
         .background {
-            // Liquid Glass (Surface.navBlur ≈ 20) posé sur VOID ; hairline
-            // supérieure = seule séparation. Le `.ignoresSafeArea` vit ICI, sur le
-            // remplissage : un Rectangle s'étire pour couvrir la zone sous l'home
-            // indicator. Le poser sur la barre composite ne réétirait PAS ce fond
-            // (background calé sur le contenu) → bande VOID noire résiduelle.
-            Rectangle()
+            // Liquid Glass (Surface.navBlur ≈ 20) dans la pilule + hairline sur
+            // TOUT le contour (la séparation entoure la barre flottante).
+            // ZÉRO ombre portée — la profondeur se lit par la luminance du verre
+            // sur VOID + le hairline (règle n°8, jamais d'ombre diffuse).
+            RoundedRectangle(cornerRadius: Radius.nav, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(Surface.hairline).frame(height: 1)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.nav, style: .continuous)
+                        .strokeBorder(Surface.hairline, lineWidth: 1)
                 }
-                .ignoresSafeArea(edges: .bottom)
         }
+        // Marges qui font « flotter » : latérales (détachée des bords) + un écart
+        // sous la barre, au-dessus de l'home indicator (safe area respectée).
+        .padding(.horizontal, Grid.margin)
+        .padding(.bottom, Spacing.xs)
         // DISABLED — TX : la barre entière chute à 40 % et ignore les taps.
         .opacity(isTX ? 0.4 : 1)
         .allowsHitTesting(!isTX)

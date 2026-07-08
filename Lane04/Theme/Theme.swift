@@ -75,6 +75,7 @@ enum Radius {
     static let card: CGFloat = 14
     static let button: CGFloat = 16
     static let sheet: CGFloat = 24
+    static let nav: CGFloat = 28     // barre de navigation flottante (pilule arrondie)
 }
 
 // MARK: - Grille iPhone (§05)
