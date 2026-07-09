@@ -77,6 +77,15 @@ enum VMAProvenance: String, Codable {
     case uncalibrated  // jamais renseignée (valeur par défaut)
 }
 
+/// État d'une séance PLANIFIÉE → statut `[BRACKET]`. Verrou de vérité : `planned`
+/// = prévu dans l'app (offline), `scheduled` = **réellement** injecté sur la montre
+/// pour sa date (WorkoutKit). L'instrument ne ment pas sur ce qui est sur la montre.
+enum PlannedState: String, Codable {
+    case planned = "PLANNED"           // dans l'app, pas encore transmis
+    case scheduled = "SCHEDULED"       // sur la montre pour sa date
+    case fault = "SCHEDULE FAULT"      // la transmission a échoué
+}
+
 // MARK: - Modèles
 
 /// Un protocole compilé : template réutilisable ou copie `[DRAFT]` éditable.
@@ -96,6 +105,11 @@ final class RunProtocol {
 
     @Relationship(deleteRule: .cascade, inverse: \ProtocolBlock.owner)
     var blocks: [ProtocolBlock]
+
+    /// Occurrences planifiées de ce protocole (calendrier). Cascade : supprimer un
+    /// protocole retire ses séances planifiées (un plan sans contenu n'a pas de sens).
+    @Relationship(deleteRule: .cascade, inverse: \PlannedSession.proto)
+    var plans: [PlannedSession] = []
 
     init(
         id: UUID = UUID(),
@@ -117,6 +131,34 @@ final class RunProtocol {
         self.createdAt = createdAt
         self.summary = summary
         self.blocks = blocks
+    }
+}
+
+/// Une séance PLANIFIÉE : une occurrence datée qui référence un protocole (le quoi).
+/// Le même protocole peut être planifié plusieurs jours → occurrence distincte.
+@Model
+final class PlannedSession {
+    var id: UUID
+    /// Jour + heure prévus (l'heure sert à la programmation WorkoutKit).
+    var date: Date
+    var state: PlannedState
+    var createdAt: Date
+    /// Le protocole à courir. Optionnel : SwiftData nullifie côté suppression via
+    /// la cascade inverse portée par `RunProtocol.plans`.
+    var proto: RunProtocol?
+
+    init(
+        id: UUID = UUID(),
+        date: Date,
+        state: PlannedState = .planned,
+        createdAt: Date = .now,
+        proto: RunProtocol? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.state = state
+        self.createdAt = createdAt
+        self.proto = proto
     }
 }
 
@@ -237,6 +279,7 @@ enum LaneSchema {
         ProtocolBlock.self,
         ProtocolStep.self,
         OperatorProfile.self,
-        RunLog.self
+        RunLog.self,
+        PlannedSession.self
     ]
 }

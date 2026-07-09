@@ -13,6 +13,7 @@ import SwiftData
 
 enum Tab: String, CaseIterable, Identifiable {
     case protocols = "PROTOCOLS"
+    case calendar = "CALENDAR"
     case logs = "LOGS"
     case console = "CONSOLE"
     var id: String { rawValue }
@@ -23,6 +24,7 @@ enum Tab: String, CaseIterable, Identifiable {
     var voiceOverLabel: String {
         switch self {
         case .protocols: return "Protocoles"
+        case .calendar:  return "Calendrier"
         case .logs:      return "Journal"
         case .console:   return "Console"
         }
@@ -48,6 +50,7 @@ struct RootView: View {
             Group {
                 switch router.tab {
                 case .protocols: ProtocolsScreen()
+                case .calendar: CalendarScreen()
                 case .logs: LogsScreen()
                 case .console: ConsoleScreen()
                 }
@@ -249,6 +252,6 @@ struct StatusBadge: View {
     RootView()
         .modelContainer(for: [
             RunProtocol.self, ProtocolBlock.self, ProtocolStep.self,
-            OperatorProfile.self, RunLog.self
+            OperatorProfile.self, RunLog.self, PlannedSession.self
         ], inMemory: true)
 }

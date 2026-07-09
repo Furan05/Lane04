@@ -116,6 +116,20 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - Ordre des dossiers = ordre thermique de l'enum `Discipline` (EMBER→CRYO). Dossiers vides masqués (tous peuplés en V1 : 11/8/4/3/5 = 31 templates).
 - Tests : `Lane04UITests/TemplateFoldersUITests` (dossiers → détail → compile ferme la sheet ; captures `TEMPLATE_FOLDERS` / `TEMPLATE_FOLDER_DETAIL`).
 
+### CALENDAR — planification des séances (feature majeure, décision operator)
+
+> **Insight décisif** : `WorkoutScheduler.schedule(_:at:)` planifie nativement une séance pour **n'importe quelle date future** (elle apparaît seule dans l'app Exercice le jour prévu). `InjectionService.schedule` le faisait déjà mais avec `at` **codé en dur à now+60s**. Donc **planifier = programmer la transmission réelle à l'avance**, natif, sans serveur. Fidèle à « l'instrument ne ment jamais ».
+
+- **Modèle** — nouvelle entité `PlannedSession { date, state, → RunProtocol }` (occurrence datée référençant un protocole ; le même protocole peut être planifié plusieurs jours). Relation `RunProtocol.plans` **cascade** (supprimer un protocole retire ses plans — couvert par `deletingProtocol_cascadesToPlans`). Ajoutée à `LaneSchema` + aux 2 `modelContainer` en dur (`Lane04App`, preview `RootView`). **Schéma dev, pas de migration.**
+- **États `PlannedState`** (verrou de vérité) : `PLANNED` = prévu dans l'app (offline) ; `SCHEDULED` = **réellement sur la montre** pour sa date ; `SCHEDULE FAULT`. Badge `PlannedStateBadge` (steel / cyan / ember).
+- **Injection généralisée** : `InjectionService.schedule(_ workout, at date: Date = now+60s)`. L'injection immédiate (éditeur) garde son défaut ; le calendrier passe la date du plan. **Pas de RunLog** sur un COMMIT planifié (LOGS reste la trace des injections immédiates).
+- **Modèle « planifier puis injecter »** (choix operator) : on construit sa semaine **offline** (PLANNED, sans montre) ; `COMMIT` transmet à la montre pour la date → SCHEDULED. Gated sur `link.isReady` (sinon « NO LINK »). Cohérent avec le builder offline.
+- **Navigation** : **4e onglet CALENDAR** — `Tab.calendar` (entre protocols et logs), glyphe custom `CalendarGlyph` (Path §06 : cadre + bandeau + reliures + marques de jour), voiceOver « Calendrier ». La bottom bar flottante encaisse 4 glyphes.
+- **`CalendarScreen`** (semaine + agenda) : bande 7 jours (lundi→dim, points thermiques par séance, jour sélectionné souligné, aujourd'hui en blanc), navigation semaine ‹ ›, agenda du jour (cartes tag + nom + heure + état + COMMIT/RETRY contour), `PLAN A TRAINING` (aplat) → `PlanPickerSheet` (MES PROTOCOLES + TEMPLATES). Suppression par swipe/contextMenu.
+- **`PlanActions`** (off-UI, testable) : `plan` (heure défaut **07:00**), `remove`, `reschedule` (garde l'heure, **repasse en PLANNED** → re-commit), `sessions(on:)/(inWeekOf:)`, `weekDays(containing:)` (lundi en tête). Couvert par `PlanActionsTests`.
+- **Bornes V1** (*non fait, plus tard*) : vue **mois**, **glisser-déposer** pour replanifier, **heure éditable** (07:00 fixe en V1), **semaines récurrentes / templates de semaine**, **compliance HealthKit** (prévu vs réalisé), métriques de charge, désinjecter la montre à la suppression d'un SCHEDULED.
+- Tests : `PlanActionsTests` (unitaire) + `CalendarUITests` (onglet → planifier → agenda ; captures `CALENDAR_EMPTY` / `CALENDAR_PLANNED`).
+
 ### Vocabulaire : TRAINING remplace PAYLOAD (décision operator)
 - **Le case study nomme la séance compilée `PAYLOAD`** (métaphore compile → inject payload → run). L'operator a tranché : **« payload » pas assez explicite → `TRAINING` partout**, en gardant le registre système anglais MAJUSCULES (règle n°5).
 - **6 chaînes visibles** basculées : `INJECT TRAINING` (hero), `TRAINING DELIVERED`, `[TRAINING READY]` (`ProtocolState.ready` rawValue), `0 TRAININGS` (empty PROTOCOLS), `NO TRAINING LOGGED` (empty LOGS), `TRAINING LINK ESTABLISHED` (pairing). `CLAUDE.md` règles 4/5/9/12 mises à jour pour éviter un revert par une session future.

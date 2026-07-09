@@ -50,6 +50,28 @@ struct StateBadge: View {
     }
 }
 
+/// Statut d'une séance PLANIFIÉE. PLANNED = contour steel (attente) ; SCHEDULED =
+/// cyan (confirmé, sur la montre) ; FAULT = ember (action requise).
+struct PlannedStateBadge: View {
+    let state: PlannedState
+    private var tint: Color {
+        switch state {
+        case .scheduled: return .cryo
+        case .fault:     return .ember
+        case .planned:   return .steelHi
+        }
+    }
+    var body: some View {
+        Text("[\(state.rawValue)]")
+            .font(.label).tracking(1.5).foregroundStyle(tint)
+            .padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xs)
+            .overlay {
+                RoundedRectangle(cornerRadius: Radius.badge)
+                    .strokeBorder(tint.opacity(0.4), lineWidth: 1)
+            }
+    }
+}
+
 // MARK: - Bouton d'action primaire (aplat EMBER — la seule couleur pleine)
 
 struct PrimaryActionButton: View {

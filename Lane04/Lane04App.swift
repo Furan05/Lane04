@@ -42,7 +42,8 @@ struct Lane04App: App {
             ProtocolBlock.self,
             ProtocolStep.self,
             OperatorProfile.self,
-            RunLog.self
+            RunLog.self,
+            PlannedSession.self
         ])
     }
 }

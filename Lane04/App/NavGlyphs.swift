@@ -68,6 +68,31 @@ struct LogsGlyph: Shape {
     }
 }
 
+// MARK: - CALENDAR — grille datée : cadre + bandeau d'en-tête + 2 marques de jour.
+
+struct CalendarGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        // Cadre du mois.
+        path.move(to: gp(4, 5, in: rect))
+        path.addLine(to: gp(20, 5, in: rect))
+        path.addLine(to: gp(20, 20, in: rect))
+        path.addLine(to: gp(4, 20, in: rect))
+        path.closeSubpath()
+        // Bandeau d'en-tête (ligne de séparation sous les « anneaux »).
+        path.move(to: gp(4, 9, in: rect))
+        path.addLine(to: gp(20, 9, in: rect))
+        // Deux anneaux de reliure.
+        path.move(to: gp(9, 3, in: rect)); path.addLine(to: gp(9, 6, in: rect))
+        path.move(to: gp(15, 3, in: rect)); path.addLine(to: gp(15, 6, in: rect))
+        // Deux marques de jour (une séance posée).
+        path.move(to: gp(8, 13, in: rect)); path.addLine(to: gp(10, 13, in: rect))
+        path.move(to: gp(13, 13, in: rect)); path.addLine(to: gp(16, 13, in: rect))
+        path.move(to: gp(8, 16, in: rect)); path.addLine(to: gp(11, 16, in: rect))
+        return path
+    }
+}
+
 // MARK: - CONSOLE — le prompt terminal : chevron `>` + underscore `_`.
 
 struct ConsoleGlyph: Shape {
@@ -101,6 +126,7 @@ struct NavGlyphView: View {
     private var shape: AnyShape {
         switch tab {
         case .protocols: AnyShape(ProtocolsGlyph())
+        case .calendar:  AnyShape(CalendarGlyph())
         case .logs:      AnyShape(LogsGlyph())
         case .console:   AnyShape(ConsoleGlyph())
         }

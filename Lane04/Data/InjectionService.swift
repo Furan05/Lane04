@@ -23,16 +23,20 @@ enum InjectionError: LocalizedError {
 }
 
 enum InjectionService {
-    /// Planifie réellement la séance sur l'Apple Watch. Lève une erreur si
-    /// l'autorisation n'est pas accordée. `schedule` lui-même est non-throwing.
-    static func schedule(_ workout: CustomWorkout) async throws {
+    /// Planifie réellement la séance sur l'Apple Watch **pour la date donnée**.
+    /// - Injection immédiate : `date` = maintenant + ~1 min (défaut).
+    /// - Planification calendrier : `date` = le jour/heure prévus.
+    /// Lève une erreur si l'autorisation n'est pas accordée. `schedule` lui-même
+    /// est non-throwing (la seule faute exposée par le SDK = autorisation refusée).
+    static func schedule(_ workout: CustomWorkout,
+                         at date: Date = Date().addingTimeInterval(60)) async throws {
         let auth = await WorkoutScheduler.shared.requestAuthorization()
         guard auth == .authorized else { throw InjectionError.authorizationDenied }
 
         let plan = WorkoutPlan(.custom(workout))
         let when = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute],
-            from: Date().addingTimeInterval(60)
+            from: date
         )
         await WorkoutScheduler.shared.schedule(plan, at: when)
     }
