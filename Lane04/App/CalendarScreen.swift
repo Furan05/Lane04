@@ -23,21 +23,33 @@ struct CalendarScreen: View {
     @State private var selectedDay = Calendar.current.startOfDay(for: Date())
     @State private var showingPicker = false
     @State private var committing: Set<PersistentIdentifier> = []
+    @State private var mode: CalMode = .week
+
+    /// Vue temporelle : la semaine (bande + agenda du jour) ou la liste de TOUTES
+    /// les séances à traiter (à venir + passé non transmis).
+    private enum CalMode { case week, upcoming }
 
     private var weekDays: [Date] { PlanActions.weekDays(containing: selectedDay) }
     private var daySessions: [PlannedSession] { PlanActions.sessions(on: selectedDay, in: plans) }
 
     private var status: String {
-        let n = PlanActions.sessions(inWeekOf: selectedDay, in: plans).count
+        let n = mode == .week
+            ? PlanActions.sessions(inWeekOf: selectedDay, in: plans).count
+            : upcomingSessions.count
         return n == 0 ? "NO PLAN" : "\(n) PLANNED"
     }
 
     var body: some View {
         ScreenScaffold(title: "CALENDAR", status: status) {
             VStack(spacing: Spacing.l) {
-                weekHeader
-                weekStrip
-                agenda
+                modeSelector
+                if mode == .week {
+                    weekHeader
+                    weekStrip
+                    agenda
+                } else {
+                    upcomingList
+                }
             }
         }
         .sheet(isPresented: $showingPicker) {
@@ -46,6 +58,93 @@ struct CalendarScreen: View {
                 showingPicker = false
             }
         }
+    }
+
+    // MARK: - Bascule SEMAINE / À VENIR (sélecteur neutre, jamais d'aplat)
+
+    private var modeSelector: some View {
+        HStack(spacing: 0) {
+            modeSegment("SEMAINE", .week)
+            modeSegment("À VENIR", .upcoming)
+        }
+        .background(Color.carbon1, in: RoundedRectangle(cornerRadius: Radius.control))
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.control).strokeBorder(Surface.hairline, lineWidth: 1)
+        }
+    }
+
+    private func modeSegment(_ title: String, _ value: CalMode) -> some View {
+        let selected = mode == value
+        return Button {
+            Haptic.selection()
+            withAnimation(.master(Duration.micro)) { mode = value }
+        } label: {
+            Text(title)
+                .font(.label).tracking(1.5)
+                .foregroundStyle(selected ? Color.laneWhite : Color.steel)
+                .frame(maxWidth: .infinity, minHeight: Touch.min)
+                .background(selected ? Color.carbon2 : Color.clear,
+                            in: RoundedRectangle(cornerRadius: Radius.control))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    // MARK: - À VENIR : toutes les séances à traiter, groupées par jour
+
+    /// Futur (aujourd'hui inclus, tous états) + passé **non transmis** (états ≠
+    /// SCHEDULED : oubliées ou en faute). Une SCHEDULED passée = déjà sur la montre
+    /// → masquée (ce n'est plus « à traiter »).
+    private var upcomingSessions: [PlannedSession] {
+        let startToday = Calendar.current.startOfDay(for: Date())
+        return plans
+            .filter { $0.date >= startToday || $0.state != .scheduled }
+            .sorted { $0.date < $1.date }
+    }
+
+    private var upcomingGrouped: [(day: Date, sessions: [PlannedSession])] {
+        let cal = Calendar.current
+        let groups = Dictionary(grouping: upcomingSessions) { cal.startOfDay(for: $0.date) }
+        return groups.keys.sorted().map { key in
+            (day: key, sessions: groups[key]!.sorted { $0.date < $1.date })
+        }
+    }
+
+    @ViewBuilder
+    private var upcomingList: some View {
+        if upcomingGrouped.isEmpty {
+            EmptyStateView(
+                headline: "NO SESSION PLANNED",
+                metric: "0 PLANNED",
+                note: "Planifie une séance depuis la vue SEMAINE pour la retrouver ici."
+            )
+        } else {
+            ForEach(upcomingGrouped, id: \.day) { group in
+                VStack(alignment: .leading, spacing: Spacing.s) {
+                    dayGroupHeader(group.day)
+                    ForEach(group.sessions) { session in
+                        sessionCard(session, onJump: { jumpTo(session.date) })
+                    }
+                }
+            }
+        }
+    }
+
+    // En-tête de groupe de jour ; un jour passé non transmis = alerte EMBER (à traiter).
+    private func dayGroupHeader(_ day: Date) -> some View {
+        let overdue = day < Calendar.current.startOfDay(for: Date())
+        return HStack(spacing: Spacing.s) {
+            Text(Self.dayLabel(day)).font(.label).tracking(1.5)
+                .foregroundStyle(overdue ? Color.ember : Color.steelHi)
+            if overdue {
+                Text("· EN RETARD").font(.label).tracking(1.5).foregroundStyle(Color.ember)
+            }
+        }
+    }
+
+    private func jumpTo(_ date: Date) {
+        selectedDay = Calendar.current.startOfDay(for: date)
+        withAnimation(.master(Duration.micro)) { mode = .week }
     }
 
     // MARK: - Bande semaine
@@ -152,7 +251,7 @@ struct CalendarScreen: View {
     }
 
     @ViewBuilder
-    private func sessionCard(_ session: PlannedSession) -> some View {
+    private func sessionCard(_ session: PlannedSession, onJump: (() -> Void)? = nil) -> some View {
         let isCommitting = committing.contains(session.persistentModelID)
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack {
@@ -172,11 +271,8 @@ struct CalendarScreen: View {
         .padding(Spacing.l)
         .glassCard()
         .opacity(isCommitting ? 0.6 : 1)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                PlanActions.remove(session, in: modelContext)
-            } label: { Label("RETIRER", systemImage: "trash") }
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { onJump?() }   // À VENIR : tap → saute au jour dans la vue SEMAINE
         .contextMenu {
             Button(role: .destructive) {
                 PlanActions.remove(session, in: modelContext)

@@ -55,5 +55,18 @@ final class CalendarUITests: XCTestCase {
         let shotPlanned = XCTAttachment(screenshot: app.screenshot())
         shotPlanned.name = "CALENDAR_PLANNED"; shotPlanned.lifetime = .keepAlways
         add(shotPlanned)
+
+        // Vue À VENIR : la séance doit s'y retrouver aussi (toutes les séances à traiter).
+        app.buttons["À VENIR"].tap()
+        XCTAssertTrue(app.staticTexts["[PLANNED]"].waitForExistence(timeout: 5),
+                      "La séance n'apparaît pas dans la liste À VENIR")
+        let shotUpcoming = XCTAttachment(screenshot: app.screenshot())
+        shotUpcoming.name = "CALENDAR_UPCOMING"; shotUpcoming.lifetime = .keepAlways
+        add(shotUpcoming)
+
+        // Tap sur la séance → retour à la vue SEMAINE sur son jour.
+        app.staticTexts["[PLANNED]"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["PLAN A TRAINING"].waitForExistence(timeout: 5),
+                      "Le tap n'a pas ramené à la vue SEMAINE")
     }
 }
