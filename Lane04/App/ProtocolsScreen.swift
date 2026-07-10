@@ -22,6 +22,9 @@ struct ProtocolsScreen: View {
 
     @State private var showingLibrary = false
     @State private var pendingDelete: RunProtocol?   // confirmation pour un [SYNCED]
+    // Date de planification appliquée à la création (COMPILE / NEW) — défaut : aujourd'hui.
+    @State private var planDate = Calendar.current.startOfDay(for: Date())
+    @State private var showingDatePicker = false
 
     private var status: String {
         if protocols.isEmpty { return "NO TRAINING" }   // repos explicite (« le zéro est une donnée »)
@@ -52,9 +55,13 @@ struct ProtocolsScreen: View {
                     // la conclusion de la lecture de la liste, pas son préambule.
                     // Aplat EMBER unique (règle n°1) ; la création vierge est un
                     // recours EN CONTOUR (ne dépense pas l'accent).
+                    // On choisit d'abord QUAND (date, défaut aujourd'hui), puis COMMENT
+                    // (template / vierge) : la séance créée est planifiée au CALENDAR.
+                    planDateSelector
                     PrimaryActionButton(title: "COMPILE FROM TEMPLATE") { showingLibrary = true }
                     OutlineActionButton(title: "NEW FROM SCRATCH", dashed: true) {
                         let draft = ProtocolActions.createBlank(in: modelContext)
+                        PlanActions.plan(draft, on: planDate, in: modelContext)
                         router.openEditor(draft)
                     }
                 }
@@ -72,9 +79,11 @@ struct ProtocolsScreen: View {
                 let draft = Seeder.clone(template)
                 modelContext.insert(draft)
                 try? modelContext.save()
+                PlanActions.plan(draft, on: planDate, in: modelContext)  // planifie à la date choisie
                 showingLibrary = false   // ferme la sheet (y compris depuis un dossier)
             }
         }
+        .sheet(isPresented: $showingDatePicker) { planDatePickerSheet }
         .alert("DELETE PROTOCOL", isPresented: Binding(
             get: { pendingDelete != nil },
             set: { if !$0 { pendingDelete = nil } }
@@ -98,6 +107,90 @@ struct ProtocolsScreen: View {
             StatusBadge(status).fixedSize()
         }
     }
+
+    // MARK: - Date de planification (défaut aujourd'hui)
+
+    private var isPlanToday: Bool { Calendar.current.isDateInToday(planDate) }
+
+    private var planDateSelector: some View {
+        HStack(spacing: Spacing.s) {
+            Text("PLANIFIER").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            Spacer()
+            dateNudge("chevron.left", "Jour précédent") { shiftPlanDate(-1) }
+                .disabled(isPlanToday)                 // jamais dans le passé
+                .opacity(isPlanToday ? 0.3 : 1)
+            Button {
+                Haptic.selection()
+                showingDatePicker = true
+            } label: {
+                Text(Self.planLabel(planDate))
+                    .font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+                    .frame(minWidth: 132, minHeight: Touch.min)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Choisir la date de planification, \(Self.a11yDate(planDate))")
+            dateNudge("chevron.right", "Jour suivant") { shiftPlanDate(1) }
+        }
+        .padding(.horizontal, Spacing.m)
+        .padding(.vertical, Spacing.xs)
+        .glassCard()
+    }
+
+    private func dateNudge(_ symbol: String, _ a11y: String, _ action: @escaping () -> Void) -> some View {
+        Button {
+            Haptic.selection()
+            withAnimation(.master(Duration.micro)) { action() }
+        } label: {
+            Image(systemName: symbol).font(.subheadline).foregroundStyle(Color.steel)
+                .frame(width: Touch.min, height: Touch.min)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(a11y)
+    }
+
+    private func shiftPlanDate(_ delta: Int) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        if let nd = cal.date(byAdding: .day, value: delta, to: planDate), nd >= today {
+            planDate = cal.startOfDay(for: nd)
+        }
+    }
+
+    // Sélecteur graphique pour sauter à une date lointaine (aujourd'hui → futur).
+    private var planDatePickerSheet: some View {
+        ZStack {
+            Color.void.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: Spacing.l) {
+                Text("PLANIFIER LE").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+                DatePicker("", selection: Binding(
+                    get: { planDate },
+                    set: { planDate = Calendar.current.startOfDay(for: $0) }
+                ), in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .tint(.ember)
+                    .environment(\.locale, Locale(identifier: "fr_FR"))
+                PrimaryActionButton(title: "OK") { showingDatePicker = false }
+            }
+            .padding(Grid.margin)
+        }
+        .presentationBackground(Color.void)
+        .presentationCornerRadius(Radius.sheet)
+        .presentationDetents([.medium, .large])
+    }
+
+    private static let planFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "fr_FR"); f.dateFormat = "EEE d MMM"
+        return f
+    }()
+    private static func planLabel(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date) ? "AUJOURD'HUI" : planFormatter.string(from: date).uppercased()
+    }
+    private static let a11yFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "fr_FR"); f.dateFormat = "EEEE d MMMM"
+        return f
+    }()
+    private static func a11yDate(_ date: Date) -> String { a11yFormatter.string(from: date) }
 
     // Liste en List pour les actions de swipe (grammaire système).
     private var protocolList: some View {

@@ -57,3 +57,6 @@ fastlane/test_output
 # ──────────────────────────────── Divers ────────────────────────────
 *.log
 *~
+
+# Build output pour appareil physique (déploiement local)
+build-device/

@@ -17,7 +17,8 @@ final class CalendarUITests: XCTestCase {
     @MainActor
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-uitest-skip-onboarding"]
+        // Store vierge : le calendrier ne doit pas hériter de plans persistés.
+        app.launchArguments += ["-uitest-skip-onboarding", "-uitest-reset-store"]
         app.launch()
         return app
     }
@@ -68,5 +69,25 @@ final class CalendarUITests: XCTestCase {
         app.staticTexts["[PLANNED]"].firstMatch.tap()
         XCTAssertTrue(app.buttons["PLAN A TRAINING"].waitForExistence(timeout: 5),
                       "Le tap n'a pas ramené à la vue SEMAINE")
+    }
+
+    /// Créer (NEW FROM SCRATCH) avec la date par défaut (aujourd'hui) doit
+    /// planifier la séance : elle apparaît dans le CALENDAR du jour.
+    @MainActor
+    func testCreatingProtocolPlansItToday() {
+        let app = launch()
+
+        // Création vierge avec la date par défaut (aujourd'hui, non modifiée).
+        let newButton = app.buttons["NEW FROM SCRATCH"]
+        XCTAssertTrue(newButton.waitForExistence(timeout: 5), "NEW FROM SCRATCH absent")
+        newButton.tap()
+        XCTAssertTrue(app.staticTexts["PROTOCOL"].firstMatch.waitForExistence(timeout: 5),
+                      "L'éditeur ne s'est pas ouvert")
+
+        // Le CALENDAR est sur aujourd'hui par défaut → la séance doit y être planifiée
+        // (prouve que la date par défaut de création = aujourd'hui).
+        app.buttons["CALENDAR"].tap()
+        XCTAssertTrue(app.staticTexts["[PLANNED]"].waitForExistence(timeout: 5),
+                      "La séance créée n'a pas été planifiée au calendrier du jour")
     }
 }

@@ -131,6 +131,11 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - **Bornes V1** (*non fait, plus tard*) : vue **mois**, **glisser-déposer** pour replanifier, **heure éditable** (07:00 fixe en V1), **semaines récurrentes / templates de semaine**, **compliance HealthKit** (prévu vs réalisé), métriques de charge, désinjecter la montre à la suppression d'un SCHEDULED.
 - Tests : `PlanActionsTests` (unitaire) + `CalendarUITests` (onglet → planifier → agenda ; captures `CALENDAR_EMPTY` / `CALENDAR_PLANNED`).
 
+### Création = planification (COMPILE / NEW FROM SCRATCH → date)
+- **Sélecteur de date sur l'écran PROTOCOLS** (`planDateSelector`, au-dessus des 2 boutons) : `PLANIFIER ‹ AUJOURD'HUI ›`, défaut **aujourd'hui**, chevrons ±1 jour (jamais dans le passé), tap → `DatePicker` graphique (sheet, `in: today...`) pour sauter loin. **Créer un protocole le planifie** : `COMPILE FROM TEMPLATE` **et** `NEW FROM SCRATCH` appellent `PlanActions.plan(draft, on: planDate)` → la séance apparaît dans CALENDAR à cette date (défaut : aujourd'hui). NEW ouvre ensuite l'éditeur ; COMPILE reste sur la liste.
+- ⚠️ Le bouton-date porte un `accessibilityLabel` explicite → « AUJOURD'HUI » n'est **pas** requêtable en test (label écrasé) ; tester par le résultat (séance au calendrier), pas par le texte.
+- **Seam de test `-uitest-reset-store`** (DEBUG, `RootView.task`) : vide le store SwiftData avant seed. **Nécessaire car SwiftData PERSISTE entre les lancements du simulateur** → sans reset, les plans d'un run précédent cassent les assertions d'état vide. `CalendarUITests` lance avec ce flag.
+
 ### Vocabulaire : TRAINING remplace PAYLOAD (décision operator)
 - **Le case study nomme la séance compilée `PAYLOAD`** (métaphore compile → inject payload → run). L'operator a tranché : **« payload » pas assez explicite → `TRAINING` partout**, en gardant le registre système anglais MAJUSCULES (règle n°5).
 - **6 chaînes visibles** basculées : `INJECT TRAINING` (hero), `TRAINING DELIVERED`, `[TRAINING READY]` (`ProtocolState.ready` rawValue), `0 TRAININGS` (empty PROTOCOLS), `NO TRAINING LOGGED` (empty LOGS), `TRAINING LINK ESTABLISHED` (pairing). `CLAUDE.md` règles 4/5/9/12 mises à jour pour éviter un revert par une session future.

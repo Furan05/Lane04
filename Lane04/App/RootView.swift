@@ -68,6 +68,17 @@ struct RootView: View {
         .environment(link)
         .preferredColorScheme(.dark)
         .task {
+            #if DEBUG
+            // Seam de test UI : repart d'un store vierge (SwiftData persiste sinon
+            // entre les lancements du simulateur → tests non isolés).
+            if ProcessInfo.processInfo.arguments.contains("-uitest-reset-store") {
+                try? modelContext.delete(model: PlannedSession.self)
+                try? modelContext.delete(model: RunLog.self)
+                try? modelContext.delete(model: RunProtocol.self)      // cascade blocs/pas/plans
+                try? modelContext.delete(model: OperatorProfile.self)
+                try? modelContext.save()
+            }
+            #endif
             Seeder.seedIfNeeded(modelContext)
             Seeder.ensureOperatorProfile(modelContext)
             #if DEBUG
