@@ -54,10 +54,34 @@ xcrun simctl io <UDID> screenshot out.png
 
 ⚠️ `xcodebuild test` s'exécute sur un **clone** et peut laisser le simulateur principal éteint — refaire `bootstatus` avant `install`.
 
+⚠️ `simctl` ne supporte **pas** `tap` : pour piloter/capturer un écran précis, passer par un test UI (`XCUIApplication`) puis exporter la capture via `xcrun xcresulttool export attachments --path <.xcresult> --output-path <dir>`.
+
+### Déploiement sur iPhone physique (device)
+
+```bash
+# 1. UDID device (pour xcodebuild) — PAS l'identifiant coredevice de devicectl
+xcodebuild -project Lane04.xcodeproj -scheme Lane04 -showdestinations | grep 'platform:iOS' # → id 000081...
+xcrun devicectl list devices                                   # état connecté + version iOS (≥ 26)
+
+# 2. Build signé + 3. install + 4. launch
+xcodebuild -project Lane04.xcodeproj -scheme Lane04 -configuration Debug \
+  -destination 'platform=iOS,id=<DEVICE_UDID>' -derivedDataPath ./build-device \
+  -allowProvisioningUpdates DEVELOPMENT_TEAM=<TEAM> CODE_SIGN_STYLE=Automatic build
+xcrun devicectl device install app --device <DEVICE_UDID> ./build-device/Build/Products/Debug-iphoneos/Lane04.app
+xcrun devicectl device process launch --device <DEVICE_UDID> furan.Lane04
+```
+
+Après install, **premier lancement bloqué** tant que l'utilisateur n'a pas approuvé le certif : *Réglages → Général → VPN et gestion de l'appareil → Faire confiance*. Teams connues de Xcode : `defaults read com.apple.dt.Xcode IDEProvisioningTeamByIdentifier`. Team ID d'un certif local : `security find-certificate -a -p | openssl x509 -noout -subject` (champ `OU=`).
+
 ## Pièges du repo
 
 - **Groupes Xcode synchronisés** (`PBXFileSystemSynchronizedRootGroup`, `objectVersion 77`) : tout `.swift` déposé dans `Lane04/` est inclus automatiquement — **ne pas éditer le `.pbxproj`** pour ajouter un fichier.
 - **Info.plist** généré (`GENERATE_INFOPLIST_FILE = YES`) : clés via build settings `INFOPLIST_KEY_*`, pas de fichier plist.
 - **Entitlements** dans `Lane04/Lane04.entitlements` (`workout-kit` + `healthkit`). Simulateur build sans signer.
+- ⚠️ **`workout-kit`/`healthkit` exigent un compte Apple Developer PAYANT** (99 €/an) : la provision **gratuite** (personal team) refuse `com.apple.developer.workout-kit` → build device échoue (« provisioning profile doesn't include… »). **Pour installer un build gratuit sur device** (voir sans injection montre) : signer avec un fichier d'entitlements **vide** (`<dict/>`) hors repo via `CODE_SIGN_ENTITLEMENTS=<tmp>` — l'injection WorkoutKit ne marchera pas (attendu), le reste de l'app oui. ⚠️ Un build gratuit **expire après 7 jours** (réinstaller). Ne pas commiter d'entitlements modifiés.
 - **WorkoutKit** : `SpeedRangeAlert` prend `ClosedRange<Measurement<UnitSpeed>>` (pas `HKQuantity`, non `Comparable`) ; `WorkoutScheduler.schedule`/`requestAuthorization` sont `async` **non-throwing**. En test, importer explicitement `WorkoutKit`.
-- **Cible actuelle : iOS uniquement** (iOS 26). Pas de cible watchOS ni de persistance à ce jour — voir `docs/data-model.md`.
+- **Sécurité / sûreté d'injection** : tout envoi à WorkoutKit doit passer par `WorkoutBuilder.validatedCustomWorkout(for:vma:)` ; ne jamais se fier aux seules bornes de l'UI. `ProtocolValidator` impose VMA 8…25, objectifs finis et bornés, intensité 40…150 % et une structure finie. Une séance `SCHEDULED` est immuable localement : sans annulation distante WorkoutKit, ne pas la supprimer, la déplacer ni supprimer son protocole (sinon doublon/séance orpheline sur la montre).
+- **Vérité de transmission** : si WorkoutKit a accepté la séance mais que SwiftData ne peut pas l'enregistrer, signaler une faute d'enregistrement local et proposer seulement `RETRY SAVE`/`DISMISS` — **jamais `RETRY INJECT`**, qui créerait un doublon.
+- **HealthKit** : l'app ne demande actuellement que l'écriture de `HKWorkoutType` (`read: []`) ; ne pas déclarer de lecture HealthKit dans les textes de permission tant qu'aucune lecture n'est implémentée.
+- **Cible actuelle : iOS uniquement** (iOS 26, déploiement 26.0). **Persistance SwiftData en place** (`LaneSchema` : `RunProtocol`/`ProtocolBlock`/`ProtocolStep`/`OperatorProfile`/`RunLog`/`PlannedSession`) — tout nouveau `@Model` doit être ajouté à `LaneSchema.models` **et** aux 2 `modelContainer(for:)` en dur (`Lane04App`, preview `RootView`). Pas de cible watchOS (principe fondateur).
+- **Nav : bottom bar custom à glyphes** (`RootView`/`NavGlyphs`, flottante) — 4 onglets **PROTOCOLS / CALENDAR / LOGS / CONSOLE**. Pictogrammes seuls, PAS de texte (« le mot est le symbole » = règle des STATUTS, jamais de la nav — voir `docs/session-notes.md`). Avancement & décisions récentes (builder from-scratch, dossiers de templates, calendrier) : `docs/session-notes.md`.

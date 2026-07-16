@@ -167,11 +167,21 @@ enum ProtocolActions {
         return copy
     }
 
+    /// Un protocole portant une séance déjà programmée reste localement disponible :
+    /// le supprimer ferait disparaître la référence alors que la séance existe encore
+    /// sur la montre.
+    static func canDelete(_ proto: RunProtocol) -> Bool {
+        !proto.plans.contains { $0.state == .scheduled }
+    }
+
     /// Supprime un protocole (et ses blocs/pas en cascade). **Ne touche jamais les
     /// `RunLog`** : la trace de transmission est de l'historique, elle survit.
-    static func delete(_ proto: RunProtocol, in context: ModelContext) {
+    @discardableResult
+    static func delete(_ proto: RunProtocol, in context: ModelContext) -> Bool {
+        guard canDelete(proto) else { return false }
         context.delete(proto)
         try? context.save()
+        return true
     }
 
     /// Prépare le protocole de test VMA pour injection via le chemin nominal

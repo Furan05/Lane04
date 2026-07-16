@@ -23,6 +23,9 @@ struct CalendarScreen: View {
     @State private var selectedDay = Calendar.current.startOfDay(for: Date())
     @State private var showingPicker = false
     @State private var committing: Set<PersistentIdentifier> = []
+    /// Envoi confirmé par WorkoutKit, mais l'état local n'a pas pu être sauvé.
+    /// On ne relance jamais l'envoi dans ce cas.
+    @State private var localSaveWarnings: Set<PersistentIdentifier> = []
     @State private var mode: CalMode = .week
 
     /// Vue temporelle : la semaine (bande + agenda du jour) ou la liste de TOUTES
@@ -31,6 +34,8 @@ struct CalendarScreen: View {
 
     private var weekDays: [Date] { PlanActions.weekDays(containing: selectedDay) }
     private var daySessions: [PlannedSession] { PlanActions.sessions(on: selectedDay, in: plans) }
+    /// CHARGE planifiée de la semaine affichée (somme du TRIMP des séances).
+    private var weekLoad: Int { PlanActions.weeklyLoad(inWeekOf: selectedDay, in: plans, vma: vma) }
 
     private var status: String {
         let n = mode == .week
@@ -46,6 +51,7 @@ struct CalendarScreen: View {
                 if mode == .week {
                     weekHeader
                     weekStrip
+                    weekLoadLine
                     agenda
                 } else {
                     upcomingList
@@ -182,6 +188,17 @@ struct CalendarScreen: View {
         .glassCard()
     }
 
+    // CHARGE planifiée de la semaine — métrique neutre, chiffres tabulaires. 0 séance
+    // → 0 (l'instrument affiche ce qu'il sait, sans masquer une semaine vide).
+    private var weekLoadLine: some View {
+        HStack(spacing: Spacing.s) {
+            Text("CHARGE · SEMAINE").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            Spacer()
+            Text(Format.load(weekLoad)).font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+        }
+        .padding(.horizontal, Spacing.xs)
+    }
+
     private static let weekdayAbbr = ["LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM"]
 
     private func dayCell(_ day: Date, weekdayIndex: Int) -> some View {
@@ -252,7 +269,9 @@ struct CalendarScreen: View {
 
     @ViewBuilder
     private func sessionCard(_ session: PlannedSession, onJump: (() -> Void)? = nil) -> some View {
-        let isCommitting = committing.contains(session.persistentModelID)
+        let id = session.persistentModelID
+        let isCommitting = committing.contains(id)
+        let hasLocalSaveWarning = localSaveWarnings.contains(id)
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack {
                 if let proto = session.proto { TagBadge(discipline: proto.discipline) }
@@ -264,7 +283,7 @@ struct CalendarScreen: View {
             HStack(spacing: Spacing.m) {
                 Text(Self.timeLabel(session.date)).font(.data).foregroundStyle(Color.steel).metricDigits()
                 Spacer()
-                commitControl(session, isCommitting: isCommitting)
+                commitControl(session, isCommitting: isCommitting, hasLocalSaveWarning: hasLocalSaveWarning)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -274,37 +293,51 @@ struct CalendarScreen: View {
         .contentShape(Rectangle())
         .onTapGesture { onJump?() }   // À VENIR : tap → saute au jour dans la vue SEMAINE
         .contextMenu {
-            Button(role: .destructive) {
-                PlanActions.remove(session, in: modelContext)
-            } label: { Label("RETIRER DU CALENDRIER", systemImage: "trash") }
+            if PlanActions.canModify(session) {
+                Button(role: .destructive) {
+                    PlanActions.remove(session, in: modelContext)
+                } label: { Label("RETIRER DU CALENDRIER", systemImage: "trash") }
+            } else {
+                Text("PROGRAMMÉE SUR LA MONTRE")
+            }
         }
     }
 
     // COMMIT = transmettre à la montre pour la date. Aplat réservé au hero éditeur :
     // ici un bouton contour (recours de structure), teinté selon l'état.
     @ViewBuilder
-    private func commitControl(_ session: PlannedSession, isCommitting: Bool) -> some View {
-        switch session.state {
-        case .scheduled:
-            Text("SUR LA MONTRE").font(.label).tracking(1.5).foregroundStyle(Color.cryo)
-        case .planned, .fault:
-            if isCommitting {
-                Text("TX…").font(.label).tracking(1.5).foregroundStyle(Color.ember).metricDigits()
-            } else if link.isReady, session.proto != nil {
-                Button { commit(session) } label: {
-                    Text(session.state == .fault ? "RETRY COMMIT" : "COMMIT")
-                        .font(.label).tracking(1.5)
-                        .foregroundStyle(session.state == .fault ? Color.ember : Color.laneWhite)
-                        .padding(.horizontal, Spacing.m).frame(minHeight: Touch.min)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: Radius.control)
-                                .strokeBorder(session.state == .fault ? Color.ember : Surface.hairline, lineWidth: 1)
-                        }
+    private func commitControl(_ session: PlannedSession, isCommitting: Bool, hasLocalSaveWarning: Bool) -> some View {
+        if hasLocalSaveWarning {
+            Button { retryLocalSave(for: session) } label: {
+                Text("RETRY SAVE").font(.label).tracking(1.5).foregroundStyle(Color.ember)
+                    .padding(.horizontal, Spacing.m).frame(minHeight: Touch.min)
+                    .overlay { RoundedRectangle(cornerRadius: Radius.control).strokeBorder(Color.ember, lineWidth: 1) }
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel("Réessayer l'enregistrement local")
+        } else {
+            switch session.state {
+            case .scheduled:
+                Text("SUR LA MONTRE").font(.label).tracking(1.5).foregroundStyle(Color.cryo)
+            case .planned, .fault:
+                if isCommitting {
+                    Text("TX…").font(.label).tracking(1.5).foregroundStyle(Color.ember).metricDigits()
+                } else if link.isReady, session.proto != nil {
+                    Button { commit(session) } label: {
+                        Text(session.state == .fault ? "RETRY COMMIT" : "COMMIT")
+                            .font(.label).tracking(1.5)
+                            .foregroundStyle(session.state == .fault ? Color.ember : Color.laneWhite)
+                            .padding(.horizontal, Spacing.m).frame(minHeight: Touch.min)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: Radius.control)
+                                    .strokeBorder(session.state == .fault ? Color.ember : Surface.hairline, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("Transmettre la séance à la montre")
+                } else {
+                    Text("NO LINK").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
                 }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel("Transmettre la séance à la montre")
-            } else {
-                Text("NO LINK").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
             }
         }
     }
@@ -316,18 +349,42 @@ struct CalendarScreen: View {
         let id = session.persistentModelID
         committing.insert(id)
         Haptic.arm()
-        let workout = WorkoutBuilder.customWorkout(for: proto, vma: vma)
         let when = session.date
         Task {
+            var scheduledOnWatch = false
             do {
+                let workout = try WorkoutBuilder.validatedCustomWorkout(for: proto, vma: vma)
                 try await InjectionService.schedule(workout, at: when)
+                scheduledOnWatch = true
                 session.state = .scheduled
+                try modelContext.save()
                 Haptic.done()
-            } catch {
+            } catch let error as ProtocolValidationError {
                 session.state = .fault
+                localSaveWarnings.remove(id)
+                try? modelContext.save()
+                _ = error // l'état FAULT est l'information affichée dans la carte.
+            } catch {
+                // Si l'appel WorkoutKit a réussi mais la sauvegarde locale échoue,
+                // ne pas faire passer l'utilisateur par COMMIT une seconde fois.
+                if scheduledOnWatch {
+                    localSaveWarnings.insert(id)
+                } else {
+                    session.state = .fault
+                    try? modelContext.save()
+                }
             }
-            try? modelContext.save()
             committing.remove(id)
+        }
+    }
+
+    private func retryLocalSave(for session: PlannedSession) {
+        let id = session.persistentModelID
+        do {
+            try modelContext.save()
+            localSaveWarnings.remove(id)
+        } catch {
+            localSaveWarnings.insert(id)
         }
     }
 

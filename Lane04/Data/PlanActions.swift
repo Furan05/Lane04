@@ -24,18 +24,31 @@ enum PlanActions {
         return session
     }
 
-    /// Retire une séance planifiée. (Ne « désinjecte » pas la montre en V1 — voir notes.)
-    static func remove(_ session: PlannedSession, in context: ModelContext) {
+    /// Une séance déjà programmée sur la montre est immuable localement : WorkoutKit
+    /// ne nous donne pas ici de primitive d'annulation fiable. La supprimer ou la
+    /// déplacer puis la re-commiter créerait une séance fantôme/dupliquée sur la montre.
+    static func canModify(_ session: PlannedSession) -> Bool {
+        session.state != .scheduled
+    }
+
+    /// Retire une séance qui n'a pas encore été programmée sur la montre.
+    @discardableResult
+    static func remove(_ session: PlannedSession, in context: ModelContext) -> Bool {
+        guard canModify(session) else { return false }
         context.delete(session)
         try? context.save()
+        return true
     }
 
     /// Déplace une séance sur un autre jour (garde l'heure). Repasse en `[PLANNED]` :
     /// la montre ne connaît plus la nouvelle date → un COMMIT est nécessaire.
-    static func reschedule(_ session: PlannedSession, to day: Date, in context: ModelContext) {
+    @discardableResult
+    static func reschedule(_ session: PlannedSession, to day: Date, in context: ModelContext) -> Bool {
+        guard canModify(session) else { return false }
         session.date = atTime(day, keepingTimeOf: session.date)
         session.state = .planned
         try? context.save()
+        return true
     }
 
     /// Séances d'un jour donné, triées par heure (fonction pure).
@@ -50,6 +63,17 @@ enum PlanActions {
         let cal = weekCalendar
         guard let interval = cal.dateInterval(of: .weekOfYear, for: day) else { return [] }
         return all.filter { interval.contains($0.date) }
+    }
+
+    /// CHARGE cumulée de la semaine (contenant `day`) : somme du TRIMP planifié de
+    /// chaque séance, pour une VMA donnée. Charge *planifiée* de la semaine — l'outil
+    /// pour ne pas monter le volume trop vite. Fonction pure. Une séance dont le
+    /// protocole a été supprimé (proto nil) ne compte pas.
+    static func weeklyLoad(inWeekOf day: Date, in all: [PlannedSession], vma: Double) -> Int {
+        sessions(inWeekOf: day, in: all).reduce(0) { sum, session in
+            guard let proto = session.proto else { return sum }
+            return sum + WorkoutBuilder.trimp(for: proto, vma: vma)
+        }
     }
 
     // MARK: - Semaine (lundi en tête, langue FR)

@@ -218,6 +218,10 @@ enum Format {
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
 
+    /// CHARGE d'entraînement (TRIMP sommé) : score entier, sans unité. Le libellé
+    /// « CHARGE » porte le sens ; l'instrument n'ajoute pas d'unité décorative.
+    static func load(_ trimp: Int) -> String { "\(trimp)" }
+
     /// Objectif de pas en durée : « 45 S » sous la minute, « 12 MIN » si multiple
     /// entier, sinon « 1:30 MIN ». Compact, majuscules, pour le builder.
     static func goalTime(_ seconds: Int) -> String {

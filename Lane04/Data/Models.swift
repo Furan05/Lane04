@@ -243,8 +243,8 @@ final class OperatorProfile {
 
 /// Une entrée de LOGS = **trace de transmission** (injection réussie), PAS une séance
 /// courue. On n'affiche que ce qu'on sait : tag + nom du protocole + horodatage.
-/// Les distances/durées sont celles du protocole *prévu* — ne jamais les présenter
-/// comme exécutées (voir docs/session-notes.md ; lecture HealthKit réelle = V2).
+/// Les distances/durées/charge sont celles du protocole *prévu* — ne jamais les
+/// présenter comme exécutées (voir docs/session-notes.md ; lecture HealthKit = V2).
 @Model
 final class RunLog {
     var id: UUID
@@ -253,6 +253,10 @@ final class RunLog {
     var protocolName: String
     var distanceMeters: Double
     var durationSeconds: Double
+    /// CHARGE (TRIMP sommé, cf. WorkoutBuilder.trimp) **figée** à l'injection : le log
+    /// garde la charge transmise ce jour-là même si le protocole est ensuite édité ou
+    /// supprimé. Défaut 0 = migration légère des logs antérieurs à la feature CHARGE.
+    var load: Int = 0
 
     init(
         id: UUID = UUID(),
@@ -260,7 +264,8 @@ final class RunLog {
         discipline: Discipline,
         protocolName: String = "",
         distanceMeters: Double,
-        durationSeconds: Double
+        durationSeconds: Double,
+        load: Int = 0
     ) {
         self.id = id
         self.date = date
@@ -268,6 +273,7 @@ final class RunLog {
         self.protocolName = protocolName
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
+        self.load = load
     }
 }
 

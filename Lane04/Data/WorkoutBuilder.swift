@@ -18,6 +18,13 @@ import HealthKit
 
 enum WorkoutBuilder {
 
+    /// Compile seulement un protocole conforme aux invariants métier. Tous les
+    /// chemins qui transmettent à WorkoutKit doivent utiliser cette entrée.
+    static func validatedCustomWorkout(for proto: RunProtocol, vma: Double) throws -> CustomWorkout {
+        try ProtocolValidator.validate(proto, vma: vma)
+        return customWorkout(for: proto, vma: vma)
+    }
+
     /// Construit la séance WorkoutKit d'un protocole pour une VMA donnée.
     static func customWorkout(for proto: RunProtocol, vma: Double) -> CustomWorkout {
         let ordered = proto.blocks.sorted { $0.order < $1.order }
@@ -55,6 +62,29 @@ enum WorkoutBuilder {
             }
         }
         return (distance, duration)
+    }
+
+    /// CHARGE d'entraînement PLANIFIÉE (TRIMP sommé par zone, méthode d'Edwards) :
+    /// Σ minutes-en-zone × poids de zone (Z1=1 … Z5=5). Faute de FC, on somme sur les
+    /// zones d'ALLURE prescrites (%VMA → zone) : c'est la charge *prévue* du protocole,
+    /// jamais une mesure de l'effort réellement fourni. Score entier, sans unité.
+    static func trimp(for proto: RunProtocol, vma: Double) -> Int {
+        var load = 0.0
+        for block in proto.blocks {
+            for step in block.steps {
+                let seconds: Double
+                switch step.goalKind {
+                case .time:
+                    seconds = step.goalValue
+                case .distance:
+                    let v = VMACalculator.speed(vma: vma, percent: step.percentVMA)
+                    seconds = v > 0 ? step.goalValue / v : 0
+                }
+                let weight = TrainingZone.trimpWeight(forPercent: step.percentVMA)
+                load += Double(block.iterations) * (seconds / 60.0) * weight
+            }
+        }
+        return Int(load.rounded())
     }
 
     // MARK: - Mapping bas niveau (identique à l'ancien builder)

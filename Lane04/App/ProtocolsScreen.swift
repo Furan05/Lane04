@@ -22,6 +22,7 @@ struct ProtocolsScreen: View {
 
     @State private var showingLibrary = false
     @State private var pendingDelete: RunProtocol?   // confirmation pour un [SYNCED]
+    @State private var deletionBlocked = false
     // Date de planification appliquée à la création (COMPILE / NEW) — défaut : aujourd'hui.
     @State private var planDate = Calendar.current.startOfDay(for: Date())
     @State private var showingDatePicker = false
@@ -95,6 +96,11 @@ struct ProtocolsScreen: View {
             Button("CANCEL", role: .cancel) { pendingDelete = nil }
         } message: {
             Text("[SYNCED] sur la montre. Confirmer ?")
+        }
+        .alert("TRAINING SCHEDULED", isPresented: $deletionBlocked) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Ce protocole possède une séance déjà programmée sur la montre. Il reste disponible pour éviter une séance orpheline.")
         }
     }
 
@@ -219,6 +225,10 @@ struct ProtocolsScreen: View {
     // DELETE — aplat EMBER (action destructive = signal chaud). Confirme si [SYNCED].
     private func deleteButton(_ proto: RunProtocol) -> some View {
         Button(role: .destructive) {
+            guard ProtocolActions.canDelete(proto) else {
+                deletionBlocked = true
+                return
+            }
             if proto.state == .synced {
                 pendingDelete = proto
             } else {

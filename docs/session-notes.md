@@ -52,9 +52,17 @@ Empty state LOGS : « le zéro est une donnée » (`NO DATA LOGGED` en mono, pas
 - `Font.*` pilotent les axes via `UIFontDescriptor` (**Expanded = `wdth 125`**) + `UIFontMetrics` (Dynamic Type). Familles réelles : `"Archivo"`, `"JetBrains Mono"`.
 - `Font.button` ajouté (7e style hors échelle des 6 — la « voix » appliquée aux boutons). `Color.laneWhite` (car `Color.white` = système) et enum `Surface` (car `Material` = SwiftUI) : renommages assumés.
 
-### Métrique de charge — RETIRÉE en V1
-- La métrique **CHARGE** (index durée × intensité) a été **retirée** du header éditeur : un instrument n'affiche pas un chiffre dont il ne peut pas expliquer la formule. Header = **DISTANCE + DURÉE** uniquement.
-- **Candidate V2** : une vraie métrique de charge (TRIMP ou équivalent, **formule documentée**), à introduire seulement après usage réel sur device.
+### Métrique de charge — CHARGE = TRIMP (rétablie, formule documentée)
+- Historique : la CHARGE avait été **retirée** de la V1 (un instrument n'affiche pas un chiffre dont il ne peut pas expliquer la formule). Header = DISTANCE + DURÉE seulement.
+- **Rétablie** avec une formule assumée : **TRIMP sommé par zone (méthode d'Edwards)** = `Σ minutes-en-zone × poids de zone` (Z1=1 … Z5=5). Faute de FC, on somme sur les zones d'**allure prescrites** (`%VMA → TrainingZone`) : c'est la charge **PLANIFIÉE** du protocole, jamais un effort prétendu couru (l'instrument ne ment pas).
+- Implémentation (calcul) : `TrainingZone.trimpWeight` + `TrainingZone.trimpWeight(forPercent:)` (borné hors zone) ; `WorkoutBuilder.trimp(for:vma:)` (parcours identique à `totals()`) ; `Format.load` (entier, sans unité).
+- **Récupération + analyse (fait)** :
+  - `RunProtocol` → 3e tuile **CHARGE** dans le header de `ProtocolEditorView` (calcul live, métrique neutre, chiffres tabulaires — jamais un aplat d'accent).
+  - `RunLog.load` : champ `Int` (défaut 0 = migration légère) **figé à l'injection** (`InjectionController.recordSuccess`) — le log garde la charge transmise même si le protocole change ensuite.
+  - **LOGS** : CHARGE par entrée + bandeau **CHARGE · 7 J / TOTAL** (fenêtre glissante). Charge *transmise*, jamais *encaissée*.
+  - **CALENDAR** : `PlanActions.weeklyLoad(inWeekOf:in:vma:)` (pure) → ligne **CHARGE · SEMAINE** sous la bande (mode SEMAINE). Charge *planifiée* de la semaine.
+- Tests : `VMATrainingTests` (4 cas : barème borné, minutes×poids, itérations, tous templates > 0) + `PlanActionsTests.weeklyLoad_sumsPlannedTrimpInWeek`.
+- **Reste V3 (HealthKit)** : lire les vrais `HKWorkout` exécutés → charge réellement *encaissée* et compliance prévu/réalisé ; RPE post-séance (TRIMP-Foster).
 
 ### Actions de cellule PROTOCOLS (`0e7d8c3`)
 - **DELETE** (swipe leading + trailing) = aplat **EMBER** (destructif = signal chaud). Confirmation par alerte **uniquement si `[SYNCED]`** (vit peut-être sur la montre) ; un `[DRAFT]` se supprime sans confirmation.

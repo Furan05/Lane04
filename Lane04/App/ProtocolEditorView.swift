@@ -90,6 +90,7 @@ struct ProtocolEditorView: View {
             HStack(spacing: 0) {
                 summaryTile("DISTANCE", Format.distanceKM(totals.distance))
                 summaryTile("DURÉE", Format.duration(totals.duration))
+                summaryTile("CHARGE", Format.load(WorkoutBuilder.trimp(for: proto, vma: vma)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -381,6 +382,12 @@ struct ProtocolEditorView: View {
             FaultCard(status: "SYNC FAULT", cause: reason,
                       ctaTitle: "RETRY INJECT", blinking: true,
                       action: { injection.acknowledgeFault(); startInjection() })
+        case .deliveryWarning(let reason):
+            // La montre a bien reçu la séance : aucune relance d'injection ici,
+            // sinon on programmerait un doublon.
+            FaultCard(status: "DELIVERED", cause: reason,
+                      detail: "La séance est sur la montre, mais son journal local n'a pas été enregistré.",
+                      ctaTitle: "DISMISS", action: injection.acknowledgeFault)
         }
     }
 

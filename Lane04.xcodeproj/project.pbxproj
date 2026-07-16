@@ -401,7 +401,6 @@
 				DEVELOPMENT_TEAM = DUAB6AK5FC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lane 04 lit vos seances pour suivre vos allures cibles.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lane 04 planifie des seances de course sur votre Apple Watch.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -436,7 +435,6 @@
 				DEVELOPMENT_TEAM = DUAB6AK5FC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lane 04 lit vos seances pour suivre vos allures cibles.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lane 04 planifie des seances de course sur votre Apple Watch.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

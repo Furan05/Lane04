@@ -13,6 +13,7 @@
 
 import SwiftUI
 import SwiftData
+import WorkoutKit
 
 @MainActor
 @Observable
@@ -24,6 +25,9 @@ final class InjectionController {
         case transferring(Double)   // 0…1
         case flashing
         case delivered
+        /// La montre a reçu la séance, mais l'historique local reste à enregistrer.
+        /// Ce n'est surtout pas une faute de transmission : réinjecter créerait un doublon.
+        case deliveryWarning(String)
         case fault(String)
     }
 
@@ -57,6 +61,7 @@ final class InjectionController {
         case .transferring(let p):    return "TX \(Int(p * 100))%"
         case .flashing:               return "TX 100%"
         case .delivered:              return ProtocolState.synced.rawValue
+        case .deliveryWarning:        return "DELIVERED — LOCAL FAULT"
         case .fault:                  return ProtocolState.fault.rawValue
         case .idle:                   return proto.state.rawValue
         }
@@ -87,9 +92,17 @@ final class InjectionController {
         guard case .idle = phase else { return }
         activeID = proto.persistentModelID
 
-        // Builder = territoire protégé : on capture sa sortie (Sendable) avant l'async.
-        let workout = WorkoutBuilder.customWorkout(for: proto, vma: vma)
+        // Builder = territoire protégé : validation + capture de sa sortie
+        // (Sendable) avant l'async. Les valeurs SwiftData ne sont jamais fiables
+        // juste parce que l'UI les a initialement créées.
+        let workout: CustomWorkout
+        do {
+            workout = try WorkoutBuilder.validatedCustomWorkout(for: proto, vma: vma)
+        } catch {
+            return fault(error, at: 0, proto: proto)
+        }
         let totals = WorkoutBuilder.totals(for: proto, vma: vma)
+        let load = WorkoutBuilder.trimp(for: proto, vma: vma)
         let effectiveMode: TXMode = reduceMotion ? .fast : mode
         let duration = effectiveMode == .fast ? Duration.fast : Duration.ritual
 
@@ -142,10 +155,16 @@ final class InjectionController {
         }
 
         // CONFIRM — TRAINING DELIVERED = la vérité.
-        phase = .delivered
-        Haptic.done()
         proto.state = .synced
-        recordSuccess(proto: proto, totals: totals, context: context)
+        do {
+            try recordSuccess(proto: proto, totals: totals, load: load, context: context)
+            phase = .delivered
+            Haptic.done()
+        } catch {
+            // La programmation a déjà réussi : ne jamais proposer un RETRY INJECT.
+            phase = .deliveryWarning("TRAINING DELIVERED — LOCAL SAVE FAILED")
+            return
+        }
 
         try? await Task.sleep(for: .seconds(0.6))
         if case .delivered = phase { reset() }
@@ -157,13 +176,14 @@ final class InjectionController {
         proto.state = .fault
     }
 
-    private func recordSuccess(proto: RunProtocol, totals: (distance: Double, duration: TimeInterval), context: ModelContext) {
-        let count = UserDefaults.standard.integer(forKey: SettingsKey.successfulInjections)
-        UserDefaults.standard.set(count + 1, forKey: SettingsKey.successfulInjections)
+    private func recordSuccess(proto: RunProtocol, totals: (distance: Double, duration: TimeInterval), load: Int, context: ModelContext) throws {
         context.insert(RunLog(discipline: proto.discipline,
                               protocolName: proto.name,
                               distanceMeters: totals.distance,
-                              durationSeconds: totals.duration))
-        try? context.save()
+                              durationSeconds: totals.duration,
+                              load: load))
+        try context.save()
+        let count = UserDefaults.standard.integer(forKey: SettingsKey.successfulInjections)
+        UserDefaults.standard.set(count + 1, forKey: SettingsKey.successfulInjections)
     }
 }

@@ -26,6 +26,16 @@ struct VMATrainingTests {
         #expect(abs(VMACalculator.speed(vma: 16, percent: 100) - 16.0 / 3.6) < Self.epsilon)
     }
 
+    @Test func validatorRejectsUnsafePersistedValuesBeforeWorkoutKit() {
+        let step = ProtocolStep(role: .work, goalKind: .time, goalValue: .nan, percentVMA: 100)
+        let block = ProtocolBlock(title: "WORK", iterations: 1, steps: [step])
+        let proto = RunProtocol(name: "BAD DATA", discipline: .vma, blocks: [block])
+
+        #expect(throws: ProtocolValidationError.self) {
+            try ProtocolValidator.validate(proto, vma: 16)
+        }
+    }
+
     @Test func speedScalesWithPercent() {
         let full = VMACalculator.speed(vma: 16, percent: 100)
         let half = VMACalculator.speed(vma: 16, percent: 50)
@@ -111,6 +121,38 @@ struct VMATrainingTests {
         let slow = WorkoutBuilder.totals(for: proto, vma: 14).duration
         let fast = WorkoutBuilder.totals(for: proto, vma: 18).duration
         #expect(fast < slow) // à dominante distance : plus la VMA est haute, plus c'est court
+    }
+
+    // MARK: - CHARGE (TRIMP sommé par zone, méthode d'Edwards)
+
+    @Test func everyTemplateHasPositiveTrimp() {
+        for proto in TemplateCatalog.templates() {
+            #expect(WorkoutBuilder.trimp(for: proto, vma: 15) > 0, "\(proto.name) charge")
+        }
+    }
+
+    @Test func trimpWeightsAreBoundedEdwardsScale() {
+        #expect(TrainingZone.trimpWeight(forPercent: 40) == 1)   // sous Z1 → borné à Z1
+        #expect(TrainingZone.trimpWeight(forPercent: 62) == 1)   // Z1
+        #expect(TrainingZone.trimpWeight(forPercent: 95) == 4)   // Z4
+        #expect(TrainingZone.trimpWeight(forPercent: 105) == 5)  // Z5
+        #expect(TrainingZone.trimpWeight(forPercent: 130) == 5)  // au-dessus Z5 → borné à Z5
+    }
+
+    @Test func trimpEqualsMinutesTimesZoneWeight() {
+        // 10 min pleines en Z5 (105 % VMA) → 10 × 5 = 50, indépendant de la VMA.
+        let step = ProtocolStep(role: .work, goalKind: .time, goalValue: 600, percentVMA: 105)
+        let block = ProtocolBlock(title: "WORK", iterations: 1, steps: [step])
+        let proto = RunProtocol(name: "SOLO Z5", discipline: .vma, blocks: [block])
+        #expect(WorkoutBuilder.trimp(for: proto, vma: 16) == 50)
+    }
+
+    @Test func trimpCountsBlockIterations() {
+        // 4 × 1 min en Z4 (95 % VMA) → 4 × 1 × 4 = 16.
+        let step = ProtocolStep(role: .work, goalKind: .time, goalValue: 60, percentVMA: 95)
+        let block = ProtocolBlock(title: "WORK", iterations: 4, steps: [step])
+        let proto = RunProtocol(name: "4× Z4", discipline: .vma, blocks: [block])
+        #expect(WorkoutBuilder.trimp(for: proto, vma: 16) == 16)
     }
 
     // MARK: - Persistance : seed idempotent + clone

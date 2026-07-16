@@ -75,6 +75,23 @@ struct PlanActionsTests {
         #expect(PlanActions.sessions(inWeekOf: day(2026, 7, 9), in: all).count == 2)
     }
 
+    @Test func weeklyLoad_sumsPlannedTrimpInWeek() throws {
+        let ctx = try makeContext()
+        // Protocole = 10 min pleines en Z5 → TRIMP 50 (indépendant de la VMA).
+        let step = ProtocolStep(role: .work, goalKind: .time, goalValue: 600, percentVMA: 105)
+        let block = ProtocolBlock(title: "WORK", iterations: 1, steps: [step])
+        let proto = RunProtocol(name: "SOLO Z5", discipline: .vma, blocks: [block])
+        ctx.insert(proto); try ctx.save()
+
+        PlanActions.plan(proto, on: day(2026, 7, 6), in: ctx)   // lundi (dans la semaine)
+        PlanActions.plan(proto, on: day(2026, 7, 12), in: ctx)  // dimanche (dans la semaine)
+        PlanActions.plan(proto, on: day(2026, 7, 13), in: ctx)  // lundi suivant (hors semaine)
+
+        let all = try ctx.fetch(FetchDescriptor<PlannedSession>())
+        // 2 séances dans la semaine × 50 = 100 ; la 3e (hors semaine) ne compte pas.
+        #expect(PlanActions.weeklyLoad(inWeekOf: day(2026, 7, 9), in: all, vma: 16) == 100)
+    }
+
     @Test func remove_deletesSession() throws {
         let ctx = try makeContext()
         let proto = insertProtocol(ctx)
@@ -83,18 +100,18 @@ struct PlanActionsTests {
         #expect(try ctx.fetchCount(FetchDescriptor<PlannedSession>()) == 0)
     }
 
-    @Test func reschedule_movesDayKeepsTimeResetsPlanned() throws {
+    @Test func reschedule_rejectsSessionAlreadyScheduledOnWatch() throws {
         let ctx = try makeContext()
         let proto = insertProtocol(ctx)
         let s = PlanActions.plan(proto, on: day(2026, 7, 9), in: ctx)
         s.state = .scheduled   // simulate committed to watch
         try ctx.save()
 
-        PlanActions.reschedule(s, to: day(2026, 7, 12), in: ctx)
-        #expect(Calendar.current.isDate(s.date, inSameDayAs: day(2026, 7, 12)))
+        let didReschedule = PlanActions.reschedule(s, to: day(2026, 7, 12), in: ctx)
+        #expect(!didReschedule)
+        #expect(Calendar.current.isDate(s.date, inSameDayAs: day(2026, 7, 9)))
         #expect(Calendar.current.component(.hour, from: s.date) == PlanActions.defaultHour)
-        // La montre ne connaît plus la nouvelle date → re-commit nécessaire.
-        #expect(s.state == .planned)
+        #expect(s.state == .scheduled)
     }
 
     @Test func deletingProtocol_cascadesToPlans() throws {
@@ -106,6 +123,19 @@ struct PlanActionsTests {
         ProtocolActions.delete(proto, in: ctx)
         // Cascade : le plan disparaît avec son protocole.
         #expect(try ctx.fetchCount(FetchDescriptor<PlannedSession>()) == 0)
+    }
+
+    @Test func scheduledSessionCannotBeRemovedOrHaveItsProtocolDeleted() throws {
+        let ctx = try makeContext()
+        let proto = insertProtocol(ctx)
+        let session = PlanActions.plan(proto, on: day(2026, 7, 9), in: ctx)
+        session.state = .scheduled
+        try ctx.save()
+
+        #expect(!PlanActions.remove(session, in: ctx))
+        #expect(!ProtocolActions.delete(proto, in: ctx))
+        #expect(try ctx.fetchCount(FetchDescriptor<PlannedSession>()) == 1)
+        #expect(try ctx.fetchCount(FetchDescriptor<RunProtocol>()) == 1)
     }
 
     @Test func weekDays_returnsSevenMondayFirst() {

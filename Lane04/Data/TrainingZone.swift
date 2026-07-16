@@ -46,6 +46,28 @@ enum TrainingZone: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Poids Edwards de la zone pour le calcul de CHARGE (TRIMP sommé par zone) :
+    /// Z1=1 … Z5=5. Une minute en Z5 « coûte » 5× une minute en Z1. Barème documenté
+    /// (Edwards, 1993) — c'est ce qui rend la CHARGE lisible, pas un chiffre magique.
+    var trimpWeight: Double {
+        switch self {
+        case .z1: return 1
+        case .z2: return 2
+        case .z3: return 3
+        case .z4: return 4
+        case .z5: return 5
+        }
+    }
+
+    /// Poids Edwards pour un % VMA quelconque, borné : sous Z1 → poids Z1, au-dessus
+    /// Z5 → poids Z5. Ne renvoie jamais `nil` (contrairement à `zone(forPercent:)`),
+    /// pour que la CHARGE reste calculable même sur une allure hors zone.
+    static func trimpWeight(forPercent percent: Double) -> Double {
+        if let z = zone(forPercent: percent) { return z.trimpWeight }
+        return percent < TrainingZone.z1.band.lowerBound ? TrainingZone.z1.trimpWeight
+                                                          : TrainingZone.z5.trimpWeight
+    }
+
     /// Couleur du cran sur la rampe thermique (source unique : Theme).
     var color: Color {
         switch self {
