@@ -60,3 +60,6 @@ fastlane/test_output
 
 # Build output pour appareil physique (déploiement local)
 build-device/
+
+# Notes de travail locales (roadmap hors versioning)
+NEXT_UPDATE.md

@@ -38,4 +38,6 @@ enum SettingsKey {
     static let watchTarget = "console.watchTarget"
     /// Compteur d'injections réussies — bascule RITUAL→FAST à 10 (§07).
     static let successfulInjections = "tx.successfulInjections"
+    /// URL du relais Garmin auto-hébergé (fallback si absente d'Info.plist).
+    static let garminBackendURL = "garmin.backendURL"
 }

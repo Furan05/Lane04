@@ -15,8 +15,17 @@ struct ConsoleScreen: View {
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.watchTarget) private var target = WatchTarget.ultra2.rawValue
 
+    @AppStorage(SettingsKey.garminBackendURL) private var garminRelayURL = ""
+
     @Query private var profiles: [OperatorProfile]
     private var vma: Double { profiles.first?.vma ?? 16.0 }
+
+    @State private var garminLinked = false
+    @State private var garminBusy = false
+    @State private var garminFault: String?
+    @State private var editingRelay = false
+    @State private var relayDraft = ""
+    @State private var confirmUnlink = false
 
     var body: some View {
         NavigationStack {
@@ -26,10 +35,31 @@ struct ConsoleScreen: View {
                         .buttonStyle(PressableStyle())
 
                     settingsCard
+                    garminCard
                     helpCard
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .onAppear { garminLinked = GarminIntegration.shared.isConnected }
+        .alert("GARMIN RELAY", isPresented: $editingRelay) {
+            TextField("https://relay.exemple.com", text: $relayDraft)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            Button("COMMIT") {
+                garminRelayURL = relayDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                garminFault = nil
+            }
+            Button("CANCEL", role: .cancel) { }
+        } message: {
+            Text("L'URL de ton relais Garmin auto-hébergé (voir backend/README.md). Laisser vide pour désactiver.")
+        }
+        .alert("GARMIN UNLINK", isPresented: $confirmUnlink) {
+            Button("UNLINK", role: .destructive) { unlinkGarmin() }
+            Button("CANCEL", role: .cancel) { }
+        } message: {
+            Text("Le compte Garmin sera délié. Les séances déjà envoyées restent sur le compte.")
         }
     }
 
@@ -102,6 +132,85 @@ struct ConsoleScreen: View {
         Rectangle().fill(Surface.hairline).frame(height: 1)
     }
 
+    // MARK: GARMIN — relais auto-hébergé + lien de compte
+
+    /// Le lien Garmin passe par un relais que l'athlète héberge lui-même
+    /// (backend/) : l'app ne détient jamais le secret Garmin. Tant qu'aucun
+    /// relais n'est renseigné, seule la ligne de configuration apparaît.
+    private var garminCard: some View {
+        VStack(spacing: 0) {
+            Button {
+                Haptic.selection()
+                relayDraft = garminRelayURL
+                editingRelay = true
+            } label: {
+                row("GARMIN RELAY", relayLabel)
+            }
+            .buttonStyle(.plain)
+
+            if GarminIntegration.shared.isConfigured {
+                hairline
+                Button {
+                    Haptic.selection()
+                    if garminLinked { confirmUnlink = true } else { linkGarmin() }
+                } label: {
+                    HStack {
+                        Text("GARMIN LINK").font(.label).tracking(1.5).foregroundStyle(Color.steel)
+                        Spacer()
+                        Text(garminBusy ? "LINKING…" : (garminLinked ? "[LINKED]" : "[NO LINK]"))
+                            .font(.data)
+                            .foregroundStyle(garminLinked ? Color.cryo : Color.steelHi)
+                            .metricDigits()
+                    }
+                    .frame(minHeight: Touch.min)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(garminBusy)
+            }
+
+            // La faute nomme sa cause et propose UNE action : réappuyer (§10).
+            if let fault = garminFault {
+                Text("\(fault) — RETRY")
+                    .font(.label).tracking(1.5)
+                    .foregroundStyle(Color.ember)
+                    .frame(maxWidth: .infinity, minHeight: Touch.min, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, Spacing.l)
+        .glassCard()
+    }
+
+    private var relayLabel: String {
+        if let host = GarminConfiguration.backendURL?.host { return host.uppercased() }
+        return garminRelayURL.isEmpty ? "OFF" : "INVALID"
+    }
+
+    private func linkGarmin() {
+        garminFault = nil
+        garminBusy = true
+        Task {
+            do {
+                try await GarminIntegration.shared.connect()
+                garminLinked = true
+            } catch GarminIntegrationError.authorizationCancelled {
+                // Annulation volontaire : pas une faute, pas de message.
+            } catch {
+                garminFault = error.localizedDescription
+            }
+            garminBusy = false
+        }
+    }
+
+    private func unlinkGarmin() {
+        garminBusy = true
+        Task {
+            try? await GarminIntegration.shared.disconnect()
+            garminLinked = GarminIntegration.shared.isConnected
+            garminBusy = false
+        }
+    }
+
     // MARK: Aide — à quoi sert chaque réglage (français, langue de lecture §02)
 
     private var helpCard: some View {
@@ -115,6 +224,8 @@ struct ConsoleScreen: View {
                     "Les vibrations de retour, à chaque appui et pendant l'injection. ON pour les sentir, OFF pour le silence.")
             helpRow("TARGET",
                     "Le modèle d'Apple Watch visé pour l'envoi : ULTRA 2, SERIES ou SE.")
+            helpRow("GARMIN",
+                    "Réservé aux montres Garmin : renseigne l'URL de ton relais LANE 04 (auto-hébergé, dossier backend/ du projet), puis lie ton compte Garmin. L'envoi des séances vers la montre Garmin arrivera dans une prochaine version.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)

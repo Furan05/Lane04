@@ -1,0 +1,4 @@
+# Secrets et données locales du relais — jamais dans le dépôt.
+.env
+data/
+node_modules/

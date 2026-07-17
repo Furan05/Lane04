@@ -1,0 +1,13 @@
+{
+  "name": "lane04-garmin-relay",
+  "private": true,
+  "description": "Relais LANE 04 → Garmin : OAuth2 PKCE + Training API. Zéro dépendance.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/"
+  }
+}
