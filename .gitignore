@@ -63,3 +63,6 @@ build-device/
 
 # Notes de travail locales (roadmap hors versioning)
 NEXT_UPDATE.md
+
+# Instructions Claude locales (décision operator : jamais commité)
+CLAUDE.md
