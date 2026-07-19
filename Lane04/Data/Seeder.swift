@@ -31,6 +31,25 @@ enum Seeder {
         try? context.save()
     }
 
+    #if DEBUG
+    /// Seam de test UI (`-uitest-seed-logs`) : deux traces de transmission
+    /// déterministes — une dans la fenêtre 7 J glissants, une hors fenêtre —
+    /// pour rendre le bandeau CHARGE de LOGS (7 J ≠ TOTAL) sans montre.
+    @MainActor
+    static func seedUITestLogs(_ context: ModelContext) {
+        let calendar = Calendar.current
+        context.insert(RunLog(
+            date: calendar.date(byAdding: .day, value: -1, to: .now) ?? .now,
+            discipline: .vma, protocolName: "8 × 30/30",
+            distanceMeters: 6200, durationSeconds: 2160, load: 45))
+        context.insert(RunLog(
+            date: calendar.date(byAdding: .day, value: -30, to: .now) ?? .now,
+            discipline: .seuil, protocolName: "SEUIL 2 × 15",
+            distanceMeters: 9800, durationSeconds: 3300, load: 60))
+        try? context.save()
+    }
+    #endif
+
     /// Copie profonde d'un template vers un nouveau protocole `[DRAFT]` éditable.
     /// Le template source reste intact. L'objet retourné n'est pas inséré.
     static func clone(_ template: RunProtocol) -> RunProtocol {

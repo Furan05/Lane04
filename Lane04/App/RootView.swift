@@ -82,6 +82,9 @@ struct RootView: View {
             Seeder.seedIfNeeded(modelContext)
             Seeder.ensureOperatorProfile(modelContext)
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uitest-seed-logs") {
+                Seeder.seedUITestLogs(modelContext)
+            }
             if ProcessInfo.processInfo.arguments.contains("-uitest-simulate-tx") {
                 injection.simulateTransmittingForUITest()
             }
