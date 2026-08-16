@@ -54,15 +54,22 @@ struct StateBadge: View {
 /// cyan (confirmé, sur la montre) ; FAULT = ember (action requise).
 struct PlannedStateBadge: View {
     let state: PlannedState
+    /// Le protocole a changé après transmission : la montre détient toujours une
+    /// séance, mais périmée. Le mot porte l'état (règle n°10) — jamais la couleur seule.
+    var stale: Bool = false
+
     private var tint: Color {
+        if stale { return .ember }          // exige une action : réinjecter ou non
         switch state {
         case .scheduled: return .cryo
         case .fault:     return .ember
         case .planned:   return .steelHi
         }
     }
+    private var label: String { stale ? "SCHEDULED — OUT OF SYNC" : state.rawValue }
+
     var body: some View {
-        Text("[\(state.rawValue)]")
+        Text("[\(label)]")
             .font(.label).tracking(1.5).foregroundStyle(tint)
             .padding(.horizontal, Spacing.s).padding(.vertical, Spacing.xs)
             .overlay {

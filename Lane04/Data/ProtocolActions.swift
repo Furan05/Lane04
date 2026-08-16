@@ -120,6 +120,69 @@ enum ProtocolActions {
         return step
     }
 
+    /// Un protocole transmis puis modifié devient **périmé sur la montre**. On le
+    /// marque `OUT OF SYNC` et on signale ses occurrences déjà programmées ; on ne
+    /// réinjecte **jamais** automatiquement — réinjecter est la décision de l'athlète.
+    /// L'occurrence reste `SCHEDULED` : la montre détient bien une séance, seulement
+    /// ce n'est plus celle-ci.
+    static func invalidateInjection(_ proto: RunProtocol, in context: ModelContext) {
+        if proto.state == .synced { proto.state = .desynced }
+        for plan in proto.plans where plan.state == .scheduled {
+            plan.watchCopyStale = true
+        }
+        try? context.save()
+    }
+
+    /// Réordonne les pas **à l'intérieur d'un bloc** (glisser-déposer vertical).
+    /// Sémantique de `Array.move(fromOffsets:toOffset:)` : `destination` est l'index
+    /// d'insertion calculé AVANT retrait — c'est celle que fournit `onMove`.
+    /// Les `order` redeviennent contigus 0…n et la persistance est immédiate.
+    ///
+    /// Le déplacement reste **intra-bloc** : un bloc « wrapper » (WARM-UP / COOL-DOWN)
+    /// est défini par « 1 itération, 1 pas du bon rôle » (`isWrapper`) — y déposer un
+    /// pas le ferait cesser d'être un wrapper et changerait la structure du protocole.
+    static func moveStep(in block: ProtocolBlock, from source: IndexSet, to destination: Int,
+                         context: ModelContext) {
+        var ordered = block.steps.sorted { $0.order < $1.order }
+        guard !ordered.isEmpty else { return }
+
+        // Sémantique de `Array.move(fromOffsets:toOffset:)` réimplémentée à la main :
+        // elle vient de SwiftUI, et la couche données ne dépend pas de l'UI.
+        let moving = source.sorted().compactMap { ordered.indices.contains($0) ? ordered[$0] : nil }
+        guard !moving.isEmpty else { return }
+        let movingIDs = Set(moving.map(\.id))
+        // Le pas devant lequel on insère, capturé AVANT retrait (d'où `toOffset`).
+        let anchorID = destination < ordered.count ? ordered[destination].id : nil
+        ordered.removeAll { movingIDs.contains($0.id) }
+        let insertAt = anchorID.flatMap { id in ordered.firstIndex { $0.id == id } } ?? ordered.count
+        ordered.insert(contentsOf: moving, at: insertAt)
+
+        for (i, s) in ordered.enumerated() { s.order = i }
+        if let proto = block.owner { invalidateInjection(proto, in: context) }
+        try? context.save()
+    }
+
+    /// Variante glisser-déposer : place `step` **à** l'index `target` dans la séquence
+    /// finale (0 = en tête). Contrairement à `onMove`, `target` s'entend APRÈS retrait
+    /// — c'est ce que produit un dépôt sur une position visible. No-op si le pas
+    /// n'appartient pas au bloc ou s'il ne bouge pas.
+    @discardableResult
+    static func moveStep(_ step: ProtocolStep, to target: Int, in block: ProtocolBlock,
+                         context: ModelContext) -> Bool {
+        var ordered = block.steps.sorted { $0.order < $1.order }
+        guard let from = ordered.firstIndex(where: { $0.id == step.id }) else { return false }
+        let to = min(max(target, 0), ordered.count - 1)
+        guard to != from else { return false }
+        let moved = ordered.remove(at: from)
+        ordered.insert(moved, at: to)
+        for (i, s) in ordered.enumerated() { s.order = i }
+        // Invalidation portée par le déplacement lui-même : un appelant ne peut pas
+        // réordonner en oubliant de périmer la copie de la montre.
+        if let proto = block.owner { invalidateInjection(proto, in: context) }
+        try? context.save()
+        return true
+    }
+
     /// Supprime un pas d'un bloc puis renumérote. Un bloc conserve toujours **au
     /// moins un pas** (un bloc vide n'a pas de sens à injecter).
     static func deleteStep(_ step: ProtocolStep, from block: ProtocolBlock, in context: ModelContext) {

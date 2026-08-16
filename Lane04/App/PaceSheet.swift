@@ -12,12 +12,17 @@ import SwiftUI
 struct PaceSheet: View {
     @Bindable var step: ProtocolStep
     let vma: Double
+    let provenance: VMAProvenance
     @Environment(\.dismiss) private var dismiss
+    /// L'allure en s/km est la valeur de TRAVAIL de cet écran : molette et boutons la
+    /// pilotent tous les deux, et le % n'en est dérivé qu'à l'affichage. Ce qui est
+    /// PERSISTÉ au COMMIT reste `step.percentVMA` (relatif à la VMA).
     @State private var paceSeconds: Int
 
-    init(step: ProtocolStep, vma: Double) {
+    init(step: ProtocolStep, vma: Double, provenance: VMAProvenance = .calibrated) {
         self._step = Bindable(wrappedValue: step)
         self.vma = vma
+        self.provenance = provenance
         let initial = VMACalculator.paceSecondsPerKm(vma: vma, percent: step.percentVMA) ?? 240
         self._paceSeconds = State(initialValue: Int(initial.rounded()))
     }
@@ -58,9 +63,10 @@ struct PaceSheet: View {
                     Text(zone.effect).font(.bodyBrand).foregroundStyle(Color.steel)
                 }
 
-                ruler
+                // Molette — mode de saisie complémentaire, MÊME valeur que les boutons.
+                PaceWheel(paceSeconds: $paceSeconds, vma: vma, provenance: provenance)
 
-                // Crans ±5 s
+                // Crans ±5 s — la voie précise, inchangée.
                 HStack(spacing: Spacing.s) {
                     cranButton("−5S") { adjust(+5) }   // plus lent = allure + grande
                     cranButton("+5S") { adjust(-5) }   // plus rapide = allure - petite
@@ -79,19 +85,9 @@ struct PaceSheet: View {
         .presentationDetents([.medium])
     }
 
-    // Règle graduée : crans de 5 s autour de l'allure courante (le centre = cible).
-    private var ruler: some View {
-        HStack(alignment: .bottom, spacing: Spacing.m) {
-            ForEach(-4...4, id: \.self) { i in
-                let isCenter = i == 0
-                Rectangle()
-                    .fill(isCenter ? Color.ember : Surface.hairline)
-                    .frame(width: isCenter ? 2 : 1, height: isCenter ? 28 : (i % 2 == 0 ? 18 : 12))
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: 28)
-    }
+    // L'ancienne règle graduée STATIQUE (9 traits fixes autour du centre) est
+    // remplacée par `PaceWheel` : une vraie échelle qui défile, avec les mêmes crans
+    // de 5 s. En garder deux superposées donnerait deux graduations contradictoires.
 
     private func cranButton(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button {

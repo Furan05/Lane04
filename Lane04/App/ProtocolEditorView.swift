@@ -22,10 +22,16 @@ struct ProtocolEditorView: View {
     @AppStorage(SettingsKey.txMode) private var txMode = TXMode.ritual.rawValue
     @Query private var profiles: [OperatorProfile]
     private var vma: Double { profiles.first?.vma ?? 16.0 }
+    /// Mesurée, estimée ou jamais renseignée — la molette le mentionne discrètement.
+    private var vmaProvenance: VMAProvenance { profiles.first?.provenance ?? .uncalibrated }
 
     @State private var editingStep: ProtocolStep?   // sheet d'allure (%VMA)
     @State private var editingGoal: ProtocolStep?   // sheet d'objectif (durée/distance)
     @State private var showingPairing = false
+    @State private var showingSchedule = false      // sheet de date (SCHEDULE)
+    @State private var pendingDate = Date()
+    @State private var draggingStepID: UUID?        // pas saisi (éteint à 40 %)
+    @State private var dropTargetID: UUID?          // pas survolé (hairline d'insertion)
 
     private var orderedBlocks: [ProtocolBlock] {
         proto.blocks.sorted { $0.order < $1.order }
@@ -66,7 +72,7 @@ struct ProtocolEditorView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editingStep) { step in
-            PaceSheet(step: step, vma: vma)
+            PaceSheet(step: step, vma: vma, provenance: vmaProvenance)
         }
         .sheet(item: $editingGoal) { step in
             StepGoalSheet(step: step)
@@ -74,6 +80,7 @@ struct ProtocolEditorView: View {
         .sheet(isPresented: $showingPairing) {
             NavigationStack { PairingView() }
         }
+        .sheet(isPresented: $showingSchedule) { scheduleSheet }
     }
 
     private var isFlashing: Bool {
@@ -87,6 +94,7 @@ struct ProtocolEditorView: View {
         return VStack(alignment: .leading, spacing: Spacing.m) {
             tagControl
             nameControl
+            scheduleControl
             HStack(spacing: 0) {
                 summaryTile("DISTANCE", Format.distanceKM(totals.distance))
                 summaryTile("DURÉE", Format.duration(totals.duration))
@@ -96,6 +104,88 @@ struct ProtocolEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.l)
         .glassCard()
+    }
+
+    // MARK: SCHEDULE — la date de la séance (optionnelle)
+
+    /// L'occurrence sur laquelle agit l'éditeur : la prochaine à venir, sinon la plus
+    /// récente. Un protocole peut être planifié plusieurs jours (le calendrier reste
+    /// la vue complète) — l'éditeur n'en pilote qu'une.
+    private var editableSession: PlannedSession? {
+        let now = Date()
+        return proto.plans.filter { $0.date >= now }.min { $0.date < $1.date }
+            ?? proto.plans.max { $0.date < $1.date }
+    }
+
+    private var scheduleValue: String {
+        guard let session = editableSession else { return "NO DATE" }
+        return Format.dateTime(session.date)
+    }
+
+    /// Contour neutre, valeur en mono tabulaire. Aucun aplat : l'unique accent de
+    /// l'écran reste le hero INJECT (règle n°1).
+    private var scheduleControl: some View {
+        Button { presentSchedule() } label: {
+            HStack(spacing: Spacing.s) {
+                Text("SCHEDULE").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+                Spacer()
+                Text(scheduleValue)
+                    .font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Color.steel)
+            }
+            .frame(minHeight: Touch.min)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(editableSession == nil
+                            ? "Aucune date planifiée, choisir une date"
+                            : "Séance planifiée le \(scheduleValue), changer la date")
+    }
+
+    private func presentSchedule() {
+        // Déjà sur la montre : la changer exige de parler à la montre (retrait).
+        // Sans liaison, on envoie appairer plutôt que de promettre un déplacement.
+        if let session = editableSession, session.state == .scheduled, !link.isReady {
+            showingPairing = true
+            return
+        }
+        pendingDate = editableSession?.date ?? Date()
+        showingSchedule = true
+    }
+
+    /// `PLANNED` → simple déplacement local. `SCHEDULED` → retrait de la montre PUIS
+    /// réinjection (`InjectionController.reschedule`), jamais un déplacement sec.
+    private func applySchedule(_ day: Date) {
+        guard let session = editableSession else {
+            PlanActions.plan(proto, on: day, in: modelContext)
+            return
+        }
+        if session.state == .scheduled {
+            Task {
+                await injection.reschedule(session: session, to: day, vma: vma,
+                                           mode: TXMode(rawValue: txMode) ?? .ritual,
+                                           reduceMotion: reduceMotion, context: modelContext)
+            }
+        } else {
+            PlanActions.reschedule(session, to: day, in: modelContext)
+        }
+    }
+
+    private var scheduleSheet: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            Text("SCHEDULE").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            DatePicker("", selection: $pendingDate, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .tint(Color.ember)
+            OutlineActionButton(title: "COMMIT DATE") {
+                applySchedule(pendingDate)
+                showingSchedule = false
+            }
+        }
+        .padding(Spacing.l)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.carbon1.ignoresSafeArea())
     }
 
     // Tag [BRACKET] — éditable en [DRAFT] via un menu des 5 filières (nomenclature
@@ -159,8 +249,8 @@ struct ProtocolEditorView: View {
                     repsStepper(block)
                 }
             }
-            ForEach(block.steps.sorted { $0.order < $1.order }) { step in
-                stepRow(step, in: block)
+            ForEach(Array(block.steps.sorted { $0.order < $1.order }.enumerated()), id: \.element.id) { index, step in
+                reorderableStepRow(step, at: index, in: block)
             }
             // Ajout de pas — réservé aux blocs d'effort d'un [DRAFT].
             if isDraft && !isWrapper {
@@ -247,6 +337,66 @@ struct ProtocolEditorView: View {
                 .background(Color.carbon2, in: RoundedRectangle(cornerRadius: Radius.control))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Glisser-déposer vertical des pas (intra-bloc)
+
+    /// Un pas se saisit par appui long puis se glisse — aucun mode « Edit » à activer.
+    /// Mécanisme SwiftUI natif (`draggable`/`dropDestination`) : l'auto-scroll aux
+    /// bords et la mécanique du geste sont portés par le système.
+    /// ⚠️ Le lift système dessine une ombre portée — **dérogation assumée à la règle 8**
+    /// (décision operator) : elle appartient à la couche de drag de l'OS, le temps du
+    /// geste seulement. Toute l'élévation que NOUS dessinons reste en paliers de
+    /// luminance (CARBON-2) + hairline.
+    @ViewBuilder
+    private func reorderableStepRow(_ step: ProtocolStep, at index: Int, in block: ProtocolBlock) -> some View {
+        let isDragged = draggingStepID == step.id
+        VStack(spacing: 0) {
+            // Position d'insertion — hairline blanc 2 pt, idiome QUAD (comme le jour
+            // sélectionné du calendrier). Pas d'accent : l'EMBER reste au hero.
+            Rectangle()
+                .fill(Color.laneWhite)
+                .frame(height: 2)
+                .opacity(dropTargetID == step.id && !isDragged ? 1 : 0)
+            stepRow(step, in: block)
+                .opacity(isDragged ? 0.4 : 1)
+                .animation(.master(Duration.micro), value: isDragged)
+        }
+        .modifier(StepDragModifier(
+            enabled: canReorder(block),
+            payload: step.id.uuidString,
+            onGrab: {
+                Haptic.arm()                       // PRISE — impact rigide
+                draggingStepID = step.id
+            },
+            onTargeted: { targeted in
+                dropTargetID = targeted ? step.id : nil
+            },
+            onDrop: { payload in
+                drop(payload, at: index, in: block)
+            },
+            preview: { stepRow(step, in: block).frame(maxWidth: 320) }
+        ))
+    }
+
+    /// Réordonner reste possible hors [DRAFT] — c'est ce qui rend l'invalidation d'une
+    /// injection atteignable. Exclus : les templates du catalogue (jamais édités en
+    /// place) et les blocs à un seul pas.
+    private func canReorder(_ block: ProtocolBlock) -> Bool {
+        !proto.isTemplate && block.steps.count > 1
+    }
+
+    private func drop(_ payload: String, at index: Int, in block: ProtocolBlock) -> Bool {
+        defer { draggingStepID = nil; dropTargetID = nil }
+        guard let id = UUID(uuidString: payload),
+              let moved = block.steps.first(where: { $0.id == id })
+        else { return false }
+
+        let didMove = withAnimation(.master(Duration.standard)) {
+            ProtocolActions.moveStep(moved, to: index, in: block, context: modelContext)
+        }
+        if didMove { Haptic.tick() }               // DÉPÔT — impact souple
+        return didMove
     }
 
     // MARK: Ligne de pas (dualité effort/récup)
@@ -462,6 +612,32 @@ private struct IntervalRail: View {
                     style: StrokeStyle(lineWidth: effort ? 3 : 2,
                                        dash: effort ? [] : [3, 3]))
             .frame(width: 3, height: 28)
+    }
+}
+
+/// Glisser-déposer natif appliqué à une ligne de pas — ou rien du tout si le
+/// réordonnancement n'a pas lieu d'être (template, bloc à un seul pas).
+/// `payload` est `@autoclosure @escaping` côté SwiftUI : `onGrab` est donc évalué
+/// au DÉBUT du geste, ce qui donne le retour haptique de prise sans gesture parallèle.
+private struct StepDragModifier<Preview: View>: ViewModifier {
+    let enabled: Bool
+    let payload: String
+    let onGrab: () -> Void
+    let onTargeted: (Bool) -> Void
+    let onDrop: (String) -> Bool
+    @ViewBuilder let preview: () -> Preview
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .draggable({ onGrab(); return payload }(), preview: preview)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let first = items.first else { return false }
+                    return onDrop(first)
+                } isTargeted: { onTargeted($0) }
+        } else {
+            content
+        }
     }
 }
 

@@ -24,11 +24,47 @@ enum PlanActions {
         return session
     }
 
-    /// Une séance déjà programmée sur la montre est immuable localement : WorkoutKit
-    /// ne nous donne pas ici de primitive d'annulation fiable. La supprimer ou la
-    /// déplacer puis la re-commiter créerait une séance fantôme/dupliquée sur la montre.
+    /// Une séance déjà programmée sur la montre est immuable **localement** : la
+    /// déplacer sans prévenir la montre créerait une séance fantôme/dupliquée.
+    /// Elle reste replanifiable, mais uniquement par le flux qui retire d'abord
+    /// l'occurrence de la montre (`InjectionController.reschedule`).
     static func canModify(_ session: PlannedSession) -> Bool {
         session.state != .scheduled
+    }
+
+    /// Vrai si la séance est réellement sur la montre ET qu'on détient la poignée de
+    /// retrait. Une séance `SCHEDULED` sans `scheduledPlanID` vient d'un build
+    /// antérieur à la replanification : on ne sait pas la retirer → on ne la déplace
+    /// pas (mentir sur l'état de la montre est pire que refuser).
+    static func canReschedule(_ session: PlannedSession) -> Bool {
+        session.state != .scheduled || session.scheduledPlanID != nil
+    }
+
+    /// Enregistre ce que la montre détient réellement, après un `schedule` réussi.
+    static func markScheduled(_ session: PlannedSession, planID: UUID, at date: Date,
+                              in context: ModelContext) {
+        session.state = .scheduled
+        session.scheduledPlanID = planID
+        session.scheduledAt = date
+        session.watchCopyStale = false   // ce qui vient d'être transmis est à jour
+        try? context.save()
+    }
+
+    /// La montre ne détient plus rien pour cette séance (retrait confirmé) : on
+    /// redescend en `PLANNED` et on lâche la poignée. Appelé **après** la vérification
+    /// de disparition, jamais avant.
+    static func clearSchedule(_ session: PlannedSession, in context: ModelContext) {
+        session.state = .planned
+        session.scheduledPlanID = nil
+        session.scheduledAt = nil
+        try? context.save()
+    }
+
+    /// Déplace une séance dont la montre ne détient plus l'occurrence. Ne touche pas
+    /// à l'état : réservé au flux de replanification, qui a déjà retiré et vérifié.
+    static func applyNewDate(_ session: PlannedSession, to day: Date, in context: ModelContext) {
+        session.date = atTime(day, keepingTimeOf: session.date)
+        try? context.save()
     }
 
     /// Retire une séance qui n'a pas encore été programmée sur la montre.
@@ -83,6 +119,61 @@ enum PlanActions {
         cal.firstWeekday = 2 // lundi
         return cal
     }
+
+    // MARK: - Mois (grille, navigation, charge)
+
+    /// Séances du mois CALENDAIRE de `day`. Le débordement de la grille sur les mois
+    /// voisins ne compte pas ici : la charge d'août est celle d'août.
+    static func sessions(inMonthOf day: Date, in all: [PlannedSession]) -> [PlannedSession] {
+        let cal = weekCalendar
+        guard let interval = cal.dateInterval(of: .month, for: day) else { return [] }
+        return all.filter { interval.contains($0.date) }.sorted { $0.date < $1.date }
+    }
+
+    /// CHARGE cumulée du mois (somme du TRIMP planifié). Même logique que la semaine :
+    /// une séance dont le protocole a été supprimé ne compte pas.
+    static func monthlyLoad(inMonthOf day: Date, in all: [PlannedSession], vma: Double) -> Int {
+        sessions(inMonthOf: day, in: all).reduce(0) { sum, session in
+            guard let proto = session.proto else { return sum }
+            return sum + WorkoutBuilder.trimp(for: proto, vma: vma)
+        }
+    }
+
+    /// La grille du mois contenant `day` : des semaines **complètes** (lundi en tête),
+    /// donc débordant sur les mois voisins pour que chaque ligne fasse 7 cases.
+    /// Rend 28, 35 ou 42 jours selon le mois.
+    static func monthGridDays(containing day: Date) -> [Date] {
+        let cal = weekCalendar
+        guard let month = cal.dateInterval(of: .month, for: day),
+              let firstWeek = cal.dateInterval(of: .weekOfYear, for: month.start)
+        else { return [] }
+
+        var days: [Date] = []
+        var cursor = firstWeek.start
+        while cursor < month.end {
+            for offset in 0..<7 {
+                if let d = cal.date(byAdding: .day, value: offset, to: cursor) {
+                    days.append(cal.startOfDay(for: d))
+                }
+            }
+            guard let next = cal.date(byAdding: .weekOfYear, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return days
+    }
+
+    /// Le même jour, `offset` mois plus loin. Foundation borne au dernier jour du mois
+    /// cible (31 janvier + 1 mois = 28/29 février, jamais le 2 ou 3 mars).
+    static func month(_ day: Date, offset: Int) -> Date {
+        weekCalendar.date(byAdding: .month, value: offset, to: day) ?? day
+    }
+
+    /// `day` appartient-il au mois calendaire de `reference` ? (grise le débordement)
+    static func isSameMonth(_ day: Date, as reference: Date) -> Bool {
+        weekCalendar.isDate(day, equalTo: reference, toGranularity: .month)
+    }
+
+    // MARK: - Semaine
 
     /// Les 7 jours de la semaine contenant `day` (lundi → dimanche).
     static func weekDays(containing day: Date) -> [Date] {
