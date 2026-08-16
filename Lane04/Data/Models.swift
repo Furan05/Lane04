@@ -68,6 +68,10 @@ enum ProtocolState: String, Codable {
     case ready = "TRAINING READY"
     case synced = "SYNCED"
     case fault = "SYNC FAULT"
+    /// Transmis, puis modifié : la montre détient une séquence PÉRIMÉE. Jamais
+    /// réinjecté automatiquement — l'athlète décide. Ajout d'un `case` : les lignes
+    /// existantes portent toujours leur ancienne rawValue, aucune migration.
+    case desynced = "OUT OF SYNC"
 }
 
 /// Provenance de la VMA → l'instrument distingue la mesure de l'estimation.
@@ -147,18 +151,40 @@ final class PlannedSession {
     /// la cascade inverse portée par `RunProtocol.plans`.
     var proto: RunProtocol?
 
+    /// Identité du `WorkoutPlan` réellement transmis à WorkoutKit. C'est la poignée
+    /// qui permet de RETIRER l'occurrence de la montre avant de la replanifier
+    /// (`WorkoutScheduler.remove` exige le plan, pas une date seule). Sans elle, une
+    /// séance transmise serait irrécupérable → doublon garanti à la replanification.
+    /// `nil` = jamais transmise. Les lignes existantes restent à nil : ajout d'un
+    /// optionnel = migration légère automatique, aucun plan de migration requis.
+    var scheduledPlanID: UUID?
+    /// L'instant réellement programmé sur la montre (peut différer de `date` si la
+    /// replanification a échoué en cours de route). Trace de vérité, pas d'affichage.
+    var scheduledAt: Date?
+    /// Le protocole a été modifié APRÈS transmission : la montre détient toujours une
+    /// séance (l'état reste `SCHEDULED`, c'est vrai), mais une version périmée. On le
+    /// dit à l'écran plutôt que de laisser croire qu'elle est à jour.
+    /// Défaut `false` ⇒ migration légère, les lignes existantes restent à jour.
+    var watchCopyStale: Bool = false
+
     init(
         id: UUID = UUID(),
         date: Date,
         state: PlannedState = .planned,
         createdAt: Date = .now,
-        proto: RunProtocol? = nil
+        proto: RunProtocol? = nil,
+        scheduledPlanID: UUID? = nil,
+        scheduledAt: Date? = nil,
+        watchCopyStale: Bool = false
     ) {
+        self.watchCopyStale = watchCopyStale
         self.id = id
         self.date = date
         self.state = state
         self.createdAt = createdAt
         self.proto = proto
+        self.scheduledPlanID = scheduledPlanID
+        self.scheduledAt = scheduledAt
     }
 }
 

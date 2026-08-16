@@ -111,47 +111,9 @@ final class InjectionController {
         proto.state = .ready
         Haptic.arm()
 
-        // schedule() lancé en parallèle — la seule vérité.
-        let truth = Truth()
-        Task { @MainActor in
-            do { try await InjectionService.schedule(workout); truth.finished = true }
-            catch { truth.error = error; truth.finished = true }
-        }
-
-        try? await Task.sleep(for: .seconds(0.05 * duration / Duration.ritual))
-
-        // TRANSFER : 0 → 90 % sur ~72 % de la timeline. Interruption immédiate si erreur.
-        let steps = 36
-        let dt = (duration * 0.72) / Double(steps)
-        let tickEvery = max(1, Int((0.4 / dt).rounded()))
-        var progress = 0.0
-        for i in 1...steps {
-            if let error = truth.error {
-                return fault(error, at: progress, proto: proto)
-            }
-            progress = 0.90 * Double(i) / Double(steps)
-            phase = .transferring(progress)
-            if !reduceMotion, i % tickEvery == 0 { Haptic.tick() }
-            try? await Task.sleep(for: .seconds(dt))
-        }
-        phase = .transferring(0.90)
-
-        // VERROU : tenir à 90 % (la vue fait respirer le %) jusqu'à la vérité.
-        while !truth.finished {
-            try? await Task.sleep(for: .seconds(0.1))
-        }
-        if let error = truth.error {
-            return fault(error, at: 0.90, proto: proto)
-        }
-
-        // Vérité = succès : 90 → 100 %, FLASH (sauf Reduce Motion), CONFIRM.
-        for i in 1...6 {
-            phase = .transferring(0.90 + 0.10 * Double(i) / 6)
-            try? await Task.sleep(for: .seconds(0.02))
-        }
-        if !reduceMotion {
-            phase = .flashing
-            try? await Task.sleep(for: .seconds(0.080)) // obturateur du chronométreur
+        if let failure = await runTransfer(duration: duration, reduceMotion: reduceMotion,
+                                           work: { try await InjectionService.schedule(workout) }) {
+            return fault(failure.error, at: failure.progress, proto: proto)
         }
 
         // CONFIRM — TRAINING DELIVERED = la vérité.
@@ -168,6 +130,122 @@ final class InjectionController {
 
         try? await Task.sleep(for: .seconds(0.6))
         if case .delivered = phase { reset() }
+    }
+
+    // MARK: - Replanification (retrait D'ABORD, puis réinjection)
+
+    /// Déplace une séance déjà transmise. L'ordre n'est pas négociable :
+    /// **retrait de l'occurrence sur la montre → vérification → réinjection**. Un
+    /// retrait en échec abandonne la replanification ; la séance reste `SCHEDULED`
+    /// à son ANCIENNE date, parce que c'est ce que la montre détient réellement.
+    /// Jamais deux occurrences de la même séance.
+    func reschedule(session: PlannedSession, to day: Date, vma: Double, mode: TXMode,
+                    reduceMotion: Bool, context: ModelContext) async {
+        guard case .idle = phase else { return }
+        guard let proto = session.proto else { return }
+        activeID = proto.persistentModelID
+
+        // Validation avant retrait : ne jamais désarmer la montre pour découvrir
+        // ensuite qu'on ne sait pas reconstruire la séance.
+        let workout: CustomWorkout
+        do {
+            workout = try WorkoutBuilder.validatedCustomWorkout(for: proto, vma: vma)
+        } catch {
+            return fault(error, at: 0, proto: proto)
+        }
+        let effectiveMode: TXMode = reduceMotion ? .fast : mode
+        let duration = effectiveMode == .fast ? Duration.fast : Duration.ritual
+
+        phase = .arming
+        Haptic.arm()
+
+        // 1 — RETRAIT, avant toute chose.
+        if session.state == .scheduled {
+            guard let planID = session.scheduledPlanID else {
+                // Séance transmise par un build antérieur : pas de poignée de retrait.
+                // Refuser est la seule issue honnête (déplacer créerait un doublon).
+                phase = .fault("RESCHEDULE UNAVAILABLE — NO WATCH HANDLE")
+                return
+            }
+            do {
+                try await InjectionService.remove(planID: planID)
+            } catch {
+                // La montre détient TOUJOURS l'ancienne occurrence : on n'injecte pas
+                // et on ne touche ni à la date ni à l'état — mentir serait pire.
+                let cause = (error as? LocalizedError)?.errorDescription ?? "REMOVAL FAULT"
+                phase = .fault("RESCHEDULE ABORTED — \(cause)")
+                return
+            }
+            // Retrait confirmé : la montre ne détient plus rien pour cette séance.
+            PlanActions.clearSchedule(session, in: context)
+        }
+
+        // 2 — Nouvelle date, puis la chorégraphie d'injection existante (verrou 90 %).
+        PlanActions.applyNewDate(session, to: day, in: context)
+        let when = session.date
+        let planID = UUID()
+
+        if let failure = await runTransfer(duration: duration, reduceMotion: reduceMotion,
+                                           work: { try await InjectionService.schedule(workout, at: when, planID: planID) }) {
+            // Retirée de la montre mais pas reprogrammée : SCHEDULE FAULT à la
+            // nouvelle date → RETRY COMMIT depuis CALENDAR. Aucun doublon.
+            session.state = .fault
+            try? context.save()
+            return fault(failure.error, at: failure.progress, proto: proto)
+        }
+
+        // Pas de RunLog : LOGS reste la trace des injections immédiates.
+        PlanActions.markScheduled(session, planID: planID, at: when, in: context)
+        phase = .delivered
+        Haptic.done()
+        try? await Task.sleep(for: .seconds(0.6))
+        if case .delivered = phase { reset() }
+    }
+
+    // MARK: - Faisceau + VERROU de vérité (partagé injection / replanification)
+
+    /// TRANSFER 0 → 90 % sur ~72 % de la timeline, puis maintien à 90 % jusqu'à la
+    /// résolution réelle de `work` — la seule vérité. Rend `nil` en cas de succès,
+    /// sinon la faute et le % auquel le faisceau s'est interrompu.
+    private func runTransfer(duration: Double, reduceMotion: Bool,
+                             work: @escaping () async throws -> Void) async -> (error: Error, progress: Double)? {
+        let truth = Truth()
+        Task { @MainActor in
+            do { try await work(); truth.finished = true }
+            catch { truth.error = error; truth.finished = true }
+        }
+
+        try? await Task.sleep(for: .seconds(0.05 * duration / Duration.ritual))
+
+        let steps = 36
+        let dt = (duration * 0.72) / Double(steps)
+        let tickEvery = max(1, Int((0.4 / dt).rounded()))
+        var progress = 0.0
+        for i in 1...steps {
+            if let error = truth.error { return (error, progress) }
+            progress = 0.90 * Double(i) / Double(steps)
+            phase = .transferring(progress)
+            if !reduceMotion, i % tickEvery == 0 { Haptic.tick() }
+            try? await Task.sleep(for: .seconds(dt))
+        }
+        phase = .transferring(0.90)
+
+        // VERROU : tenir à 90 % (la vue fait respirer le %) jusqu'à la vérité.
+        while !truth.finished {
+            try? await Task.sleep(for: .seconds(0.1))
+        }
+        if let error = truth.error { return (error, 0.90) }
+
+        // Vérité = succès : 90 → 100 %, FLASH (sauf Reduce Motion).
+        for i in 1...6 {
+            phase = .transferring(0.90 + 0.10 * Double(i) / 6)
+            try? await Task.sleep(for: .seconds(0.02))
+        }
+        if !reduceMotion {
+            phase = .flashing
+            try? await Task.sleep(for: .seconds(0.080)) // obturateur du chronométreur
+        }
+        return nil
     }
 
     private func fault(_ error: Error, at progress: Double, proto: RunProtocol) {

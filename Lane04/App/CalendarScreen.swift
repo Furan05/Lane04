@@ -28,19 +28,27 @@ struct CalendarScreen: View {
     @State private var localSaveWarnings: Set<PersistentIdentifier> = []
     @State private var mode: CalMode = .week
 
-    /// Vue temporelle : la semaine (bande + agenda du jour) ou la liste de TOUTES
-    /// les séances à traiter (à venir + passé non transmis).
-    private enum CalMode { case week, upcoming }
+    /// Vue temporelle : la semaine (bande + agenda du jour), le mois (grille + agenda)
+    /// ou la liste de TOUTES les séances à traiter (à venir + passé non transmis).
+    private enum CalMode { case week, month, upcoming }
 
     private var weekDays: [Date] { PlanActions.weekDays(containing: selectedDay) }
     private var daySessions: [PlannedSession] { PlanActions.sessions(on: selectedDay, in: plans) }
     /// CHARGE planifiée de la semaine affichée (somme du TRIMP des séances).
     private var weekLoad: Int { PlanActions.weeklyLoad(inWeekOf: selectedDay, in: plans, vma: vma) }
 
+    /// Jours de la grille du mois affiché (semaines complètes, lundi en tête).
+    private var monthDays: [Date] { PlanActions.monthGridDays(containing: selectedDay) }
+    /// CHARGE planifiée du mois affiché.
+    private var monthLoad: Int { PlanActions.monthlyLoad(inMonthOf: selectedDay, in: plans, vma: vma) }
+
     private var status: String {
-        let n = mode == .week
-            ? PlanActions.sessions(inWeekOf: selectedDay, in: plans).count
-            : upcomingSessions.count
+        let n: Int
+        switch mode {
+        case .week:     n = PlanActions.sessions(inWeekOf: selectedDay, in: plans).count
+        case .month:    n = PlanActions.sessions(inMonthOf: selectedDay, in: plans).count
+        case .upcoming: n = upcomingSessions.count
+        }
         return n == 0 ? "NO PLAN" : "\(n) PLANNED"
     }
 
@@ -48,12 +56,18 @@ struct CalendarScreen: View {
         ScreenScaffold(title: "CALENDAR", status: status) {
             VStack(spacing: Spacing.l) {
                 modeSelector
-                if mode == .week {
+                switch mode {
+                case .week:
                     weekHeader
                     weekStrip
                     weekLoadLine
                     agenda
-                } else {
+                case .month:
+                    monthHeader
+                    monthGrid
+                    monthLoadLine
+                    agenda          // même agenda : le tap d'un jour le pilote déjà
+                case .upcoming:
                     upcomingList
                 }
             }
@@ -71,6 +85,7 @@ struct CalendarScreen: View {
     private var modeSelector: some View {
         HStack(spacing: 0) {
             modeSegment("SEMAINE", .week)
+            modeSegment("MOIS", .month)
             modeSegment("À VENIR", .upcoming)
         }
         .background(Color.carbon1, in: RoundedRectangle(cornerRadius: Radius.control))
@@ -199,6 +214,110 @@ struct CalendarScreen: View {
         .padding(.horizontal, Spacing.xs)
     }
 
+    // MARK: - MOIS : grille de semaines complètes + agenda du jour sélectionné
+
+    /// Nom du mois en Archivo Expanded (la voix), millésime en mono tabulaire (la
+    /// donnée). Les flèches déplacent d'un mois, jamais d'un jour.
+    private var monthHeader: some View {
+        HStack(spacing: Spacing.s) {
+            weekArrow("chevron.left", "Mois précédent") { shiftMonth(-1) }
+            Spacer()
+            HStack(spacing: Spacing.s) {
+                Text(Self.monthName(selectedDay))
+                    .font(.button).foregroundStyle(Color.laneWhite)
+                Text(Self.monthYear(selectedDay))
+                    .font(.data).foregroundStyle(Color.steelHi).metricDigits()
+            }
+            Spacer()
+            weekArrow("chevron.right", "Mois suivant") { shiftMonth(1) }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var monthGrid: some View {
+        VStack(spacing: Spacing.s) {
+            HStack(spacing: Spacing.xs) {
+                ForEach(Array(Self.weekdayAbbr.enumerated()), id: \.offset) { _, abbr in
+                    Text(abbr)
+                        .font(.label).tracking(1)
+                        .foregroundStyle(Color.steelHi)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .accessibilityHidden(true)   // en-têtes décoratifs : chaque case se nomme déjà
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: 7),
+                      spacing: Spacing.s) {
+                ForEach(Array(monthDays.enumerated()), id: \.offset) { _, day in
+                    monthCell(day)
+                }
+            }
+        }
+        .padding(Spacing.s)
+        .glassCard()
+    }
+
+    /// Case de mois : chiffre en mono tabulaire + points thermiques. Le débordement
+    /// sur les mois voisins reste lisible mais éteint (40 %) — il situe, il n'attire pas.
+    private func monthCell(_ day: Date) -> some View {
+        let cal = Calendar.current
+        let isSelected = cal.isDate(day, inSameDayAs: selectedDay)
+        let isToday = cal.isDateInToday(day)
+        let inMonth = PlanActions.isSameMonth(day, as: selectedDay)
+        let sessions = PlanActions.sessions(on: day, in: plans)
+        return Button {
+            Haptic.selection()
+            withAnimation(.master(Duration.micro)) { selectedDay = cal.startOfDay(for: day) }
+        } label: {
+            VStack(spacing: Spacing.xs) {
+                Text("\(cal.component(.day, from: day))")
+                    .font(.data).metricDigits()
+                    .foregroundStyle(isToday || isSelected ? Color.laneWhite : Color.steel)
+                dots(sessions, on: day)
+                Rectangle()   // soulignement du jour sélectionné (idiome QUAD)
+                    .fill(Color.laneWhite)
+                    .frame(height: 2)
+                    .opacity(isSelected ? 1 : 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: Touch.min)
+            .opacity(inMonth ? 1 : 0.4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Self.a11yDay(day, count: sessions.count))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var monthLoadLine: some View {
+        HStack(spacing: Spacing.s) {
+            Text("CHARGE · MOIS").font(.label).tracking(1.5).foregroundStyle(Color.steelHi)
+            Spacer()
+            Text(Format.load(monthLoad)).font(.data).foregroundStyle(Color.laneWhite).metricDigits()
+        }
+        .padding(.horizontal, Spacing.xs)
+    }
+
+    private func shiftMonth(_ delta: Int) {
+        selectedDay = PlanActions.month(selectedDay, offset: delta)
+    }
+
+    private static let monthNameFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = "MMMM"
+        return f
+    }()
+    static func monthName(_ date: Date) -> String {
+        monthNameFormatter.string(from: date).uppercased(with: Locale(identifier: "fr_FR"))
+    }
+
+    private static let monthYearFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy"
+        return f
+    }()
+    static func monthYear(_ date: Date) -> String { monthYearFormatter.string(from: date) }
+
     private static let weekdayAbbr = ["LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM"]
 
     private func dayCell(_ day: Date, weekdayIndex: Int) -> some View {
@@ -217,7 +336,7 @@ struct CalendarScreen: View {
                 Text("\(cal.component(.day, from: day))")
                     .font(.data).metricDigits()
                     .foregroundStyle(isSelected ? Color.laneWhite : Color.steel)
-                dots(sessions)
+                dots(sessions, on: day)
                 Rectangle()   // soulignement du jour sélectionné (idiome QUAD)
                     .fill(Color.laneWhite)
                     .frame(height: 2)
@@ -232,16 +351,38 @@ struct CalendarScreen: View {
     }
 
     // Points thermiques (teinte = filière) : jusqu'à 3, puis « + ».
-    private func dots(_ sessions: [PlannedSession]) -> some View {
-        HStack(spacing: 2) {
+    // La FORME porte l'état, comme les badges (règle n°9) : contour = en attente
+    // (PLANNED), aplat = confirmé sur la montre (SCHEDULED), EMBER = exige une action
+    // (faute, ou passé jamais transmis), éteint = passé et déjà transmis.
+    private func dots(_ sessions: [PlannedSession], on day: Date) -> some View {
+        let cal = Calendar.current
+        let isPast = cal.startOfDay(for: day) < cal.startOfDay(for: Date())
+        return HStack(spacing: 2) {
             ForEach(Array(sessions.prefix(3).enumerated()), id: \.offset) { _, s in
-                Circle().fill(s.proto?.discipline.tint ?? Color.steelDim).frame(width: 4, height: 4)
+                dot(s, isPast: isPast)
             }
             if sessions.count > 3 {
                 Text("+").font(.system(size: 8)).foregroundStyle(Color.steel)
             }
         }
         .frame(height: 5)
+    }
+
+    @ViewBuilder
+    private func dot(_ session: PlannedSession, isPast: Bool) -> some View {
+        let tint = session.proto?.discipline.tint ?? Color.steelDim
+        if session.state == .scheduled {
+            // Sur la montre : aplat. Passé, elle a fait son office → on l'éteint.
+            Circle().fill(isPast ? Color.steelDim : tint)
+                .frame(width: 4, height: 4)
+                .opacity(isPast ? 0.5 : 1)
+        } else if session.state == .fault || isPast {
+            // Faute, ou jour passé sans transmission : alerte (jamais un décor).
+            Circle().fill(Color.ember).frame(width: 4, height: 4)
+        } else {
+            // En attente de COMMIT : contour, jamais un aplat.
+            Circle().strokeBorder(tint, lineWidth: 1).frame(width: 5, height: 5)
+        }
     }
 
     // MARK: - Agenda du jour
@@ -276,7 +417,7 @@ struct CalendarScreen: View {
             HStack {
                 if let proto = session.proto { TagBadge(discipline: proto.discipline) }
                 Spacer()
-                PlannedStateBadge(state: session.state)
+                PlannedStateBadge(state: session.state, stale: session.watchCopyStale)
             }
             Text(session.proto?.name ?? "— PROTOCOLE SUPPRIMÉ —")
                 .font(.bodyBrand).foregroundStyle(Color.laneWhite)
@@ -354,9 +495,13 @@ struct CalendarScreen: View {
             var scheduledOnWatch = false
             do {
                 let workout = try WorkoutBuilder.validatedCustomWorkout(for: proto, vma: vma)
-                try await InjectionService.schedule(workout, at: when)
+                // La poignée de retrait est capturée AVANT le save : sans elle, la
+                // séance serait irrécupérable sur la montre (pas de replanification).
+                let planID = try await InjectionService.schedule(workout, at: when)
                 scheduledOnWatch = true
                 session.state = .scheduled
+                session.scheduledPlanID = planID
+                session.scheduledAt = when
                 try modelContext.save()
                 Haptic.done()
             } catch let error as ProtocolValidationError {
